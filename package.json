@@ -1,10 +1,9 @@
 {
-  "name": "server",
-  "version": "10.3.1",
-  "description": "An example module to illustrate the usage of a package.json",
-  "author": "Your Name <you.name@example.org>",
-  "contributors": [{
-		"name": "Foo Bar",
-		"email": "foo.bar@example.com"
-	}]
+  "name": "Tripster-serverside",
+  "main": "server.js",
+	"description": "An example module to illustrate the usage of a package.json",
+	"scripts": {
+		"start": "node server.js",
+	}
 }
+
