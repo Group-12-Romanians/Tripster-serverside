@@ -4,6 +4,6 @@
 	"description": "An example module to illustrate the usage of a package.json",
 	"scripts": {
 		"start": "node server.js",
-	}
+	},
 }
 
