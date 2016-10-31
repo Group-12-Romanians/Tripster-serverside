@@ -1,14 +1,12 @@
 {
   "name": "Tripster-serverside",
   "main": "server.js",
-	"description": "An example module to illustrate the usage of a package.json",
-	"scripts": {
-		"start": "node server.js"
-	},
-	"dependencies": {
-		"express": "3.x"
-	}
+  "description": "An example module to illustrate the usage of a package.json",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "body-parser": "^1.15.2",
+    "express": "3.x"
+  }
 }
-
-
-
