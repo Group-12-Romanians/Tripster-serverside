@@ -23,14 +23,17 @@ app.get('/process_get', function(req, res) {
     console.log(ext);
 });
 
+var places = "";
+
+app.get('/locations', function(req, res) {
+	res.send(places);
+});
+
 app.post('/sync_locations', function(req, res) {
 	var locations = req.body.locations;
-	console.log("locations" + locations);
-	if (locations === "Dragos") {
-		res.send("OK!");
-	} else {
-		res.send("NOTOK!");
-	}
+	console.log("locations: " + locations);
+	places += locations;
+	res.send("OK!");
 });
 
 app.listen(port);
