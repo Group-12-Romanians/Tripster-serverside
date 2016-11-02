@@ -4,8 +4,63 @@ var fs = require('fs');
 var url = require('url');
 var path = require('path');
 var app = express();
+var mongoose = require('mongoose');
+var MongoClient = require('mongodb').MongoClient;
+var assert = require('assert');
+mongoose.Promise = global.Promise;
 
 var port = process.env.PORT || 8081
+
+var dbUrl = 'mongodb://146.169.46.220:27017';
+mongoose.connect(dbUrl);
+var Schema = mongoose.Schema;
+
+var userSchema = new Schema({
+	user_id: 	String,
+	name: 		String,
+});
+
+var imageSchema = new Schema({
+	image_id: 	String,
+	name:		String,
+	latitude:	String,
+	longitutde:	String,
+	user_id:	String,
+	path:		String,
+});
+
+var tripSchema = new Schema({
+	trip_id:	String,
+	user_id:	String,
+});
+
+var locationSchema = new Schema({
+	latitude:	String,
+	longitutude:	String,
+	timestamp:	Number,
+});
+
+var User = mongoose.model('User', userSchema);
+var Image = mongoose.model('Image', imageSchema);
+var tripSchema = mongoose.model('Trip', tripSchema); 
+
+var newUser = new User( {
+	user_id: '123',
+	name: 'Dragoa',
+});
+
+newUser.save(function(err) {
+	if (err) throw err;
+
+  console.log('User created!');
+});
+
+User.find({}, function(err, users) {
+  if (err) throw err;
+
+  // object of all the users
+  console.log(users);
+});
 
 app.use(express.static('public'));
 app.use(bodyParser.json());
