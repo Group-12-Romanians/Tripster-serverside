@@ -11,7 +11,7 @@ app.use(express.static('public'));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true })); 
 
-app.get('/index.html', function (req, res) {
+app.get('/', function (req, res) {
    res.send("This is working mtfs!!!");
 });
 
