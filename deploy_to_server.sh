@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ssh -q dii14@shell3.doc.ic.ac.uk 'rm -rf ~/.tmpTripster/*'
-ssh -q dii14@shell3.doc.ic.ac.uk 'ssh -q dii14@146.169.46.220 "'"rm -rf app"'"'
+ssh -q dii14@shell3.doc.ic.ac.uk 'ssh -q dii14@146.169.46.220 "'"rm -rf app/*"'"'
 echo 'cleaned ~/.tmpTripster on shell3 and app on 146.169.46.220'
 scp -q -r ~/Tripster-serverside/app dii14@shell3.doc.ic.ac.uk:.tmpTripster
 echo 'copied app from here to shell3:~/.tmpTripster'
