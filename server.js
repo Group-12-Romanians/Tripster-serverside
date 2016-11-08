@@ -11,7 +11,7 @@ mongoose.Promise = global.Promise;
 
 var port = process.env.PORT || 8081
 
-var dbUrl = 'mongodb://146.169.46.220:27017';
+var dbUrl = 'mongodb://localhost:27017';
 mongoose.connect(dbUrl);
 var Schema = mongoose.Schema;
 
@@ -66,8 +66,8 @@ app.use(express.static('public'));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true })); 
 
-app.get('/index.html', function (req, res) {
-   res.sendFile( __dirname + "/" + "index.html" );
+app.get('/', function (req, res) {
+   res.send("This is working!!!");
 });
 
 app.get('/process_get', function(req, res) {
