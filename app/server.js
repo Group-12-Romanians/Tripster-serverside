@@ -46,7 +46,7 @@ var tripSchema = mongoose.model('Trip', tripSchema);
 
 var newUser = new User( {
 	user_id: '123',
-	name: 'Dragos',
+	name: 'Andreea K',
 });
 
 var out = []
