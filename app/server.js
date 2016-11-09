@@ -3,82 +3,23 @@ var bodyParser = require('body-parser');
 var fs = require('fs');
 var url = require('url');
 var path = require('path');
-var app = express();
+var db = require('./database');
 var mongoose = require('mongoose');
-var MongoClient = require('mongodb').MongoClient;
-var assert = require('assert');
 mongoose.Promise = global.Promise;
-
-var port = process.env.PORT || 8081
-
-var dbUrl = 'mongodb://146.169.46.220:27017';
-mongoose.connect(dbUrl);
-var Schema = mongoose.Schema;
-
-var userSchema = new Schema({
-	user_id: 	String,
-	name: 		String,
-});
-
-var imageSchema = new Schema({
-	image_id: 	String,
-	name:		String,
-	latitude:	String,
-	longitutde:	String,
-	user_id:	String,
-	path:		String,
-});
-
-var tripSchema = new Schema({
-	trip_id:	String,
-	user_id:	String,
-});
-
-var locationSchema = new Schema({
-	latitude:	String,
-	longitutude:	String,
-	timestamp:	Number,
-});
-
-var User = mongoose.model('User', userSchema);
-var Image = mongoose.model('Image', imageSchema);
-var tripSchema = mongoose.model('Trip', tripSchema); 
-
-var newUser = new User( {
-	user_id: '123',
-	name: 'Andreea K',
-});
-
-var out = []
-newUser.save(function(err) {
-	if (err) throw err;
-  console.log('User created!');
-});
-
-User.find({}, function(err, users) {
-  if (err) throw err;
-	out = users;
-  // object of all the users
-  console.log(users);
-});
-
+var app = express();
 app.use(express.static('public'));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true })); 
 
+var port = process.env.PORT || 8081
+
 app.get('/', function (req, res) {
-   res.send("This is working!!! DB contains:\n" + out);
+	db.User.find({}).then(function(users) {
+		res.send('This is working!!! DB contains:\n' + users);
+	}).catch(function (err) {
+		res.send('DB failed');
+	});
 });
-
-app.get('/process_get', function(req, res) {
-    var request = url.parse(req.url, true);
-    var action = request.pathname;
-    var filePath = path.join(__dirname, action).split('%20').join(' ');
-    var ext = path.extname(action);
-    console.log(ext);
-});
-
-var places = "";
 
 app.get('/locations', function(req, res) {
 	res.send(places);
@@ -91,7 +32,43 @@ app.post('/sync_locations', function(req, res) {
 	res.send("OK!");
 });
 
-app.listen(port);
+app.get('/all_users', function(req, res) {
+	db.User.find({}).then(function(all_users) {
+		var user_names = all_users.map(function(user) {
+			return user.name + ", with id: " + user.user_id;
+		});
+		res.send(user_names);
+	}).catch(function(err){
+		res.send('Error while getting all users:' + err);
+	});
+});
 
-console.log('Server running now on port: ' + port);
+app.post('/new_user', function(req, res) {
+	var id = req.body.id;
+	var name = req.body.name;
+	console.log("New user with id: " + id + " and name: " + name);
+	new db.User({
+		user_id: id,
+		name: name
+	}).save().then(function() {
+		res.send('OK');
+	}).catch(function (err) {
+		res.send('Error while saving user: ' + err);
+	});
+});
 
+var startServer = function() {
+	var dbUrl = 'mongodb://146.169.46.220:27017';
+	mongoose.connect(dbUrl);
+	
+	var server = app.listen(port);
+	console.log('Server running now on port: ' + port);
+	
+	server.on('close', function() {
+		return mongoose.connection.close();
+	});
+
+	return server;
+};
+
+startServer();
