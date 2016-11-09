@@ -17,7 +17,7 @@ app.get('/', function (req, res) {
 	db.User.find({}).then(function(users) {
 		res.send('This is working!!! DB contains:\n' + users);
 	}).catch(function (err) {
-		res.send('DB failed');
+		res.status(400).send('DB failed');
 	});
 });
 
@@ -34,12 +34,9 @@ app.post('/sync_locations', function(req, res) {
 
 app.get('/all_users', function(req, res) {
 	db.User.find({}).then(function(all_users) {
-		var user_names = all_users.map(function(user) {
-			return user.name + ", with id: " + user.user_id;
-		});
-		res.send(user_names);
+		res.send(all_users);
 	}).catch(function(err){
-		res.send('Error while getting all users:' + err);
+		res.status(400).send('Error while getting all users:' + err);
 	});
 });
 
@@ -50,10 +47,57 @@ app.post('/new_user', function(req, res) {
 	new db.User({
 		user_id: id,
 		name: name
-	}).save().then(function() {
-		res.send('OK');
+	}).save().then(function(user) {
+		res.send(user._id);
 	}).catch(function (err) {
-		res.send('Error while saving user: ' + err);
+		res.status(400).send('Error while saving user: ' + err);
+	});
+});
+
+app.get('/notifications/requests', function(req, res) {
+	db.Friendship.find({friend2: req.query.user_id, level: "unconfirmed"})
+	.then(function(friendship) {
+		res.send(friendship);
+	}).catch(function(err) {
+		res.status(400).send('Error while getting pending requests.');
+	});
+});
+
+app.post('/friend_response', function(req, res) {
+	var friendship = {
+		friend2: req.query.user_id,
+		friend1: req.body.friend,
+		level: "unconfirmed"
+	}
+	var stat = req.body.stat;
+	if(stat==="confirmed") {
+		db.Friendship.findOneAndUpdate(friendship, {
+				level: "confirmed"}, {upsert: false, new: true})
+		.then(function(doc) {
+			res.send(doc);
+		}).catch(function(err) {
+			res.status(400).send("Error when confirming friendship");
+		});
+	} else {
+		db.Friendship.remove(friendship).then(function() {
+			res.send("OK");
+		}).catch(function(err){
+			res.status(400).send("Error when removing friendship: " + err);
+		});
+	}
+});
+
+app.post('/friend_request', function(req, res) {
+	var sender = req.query.user_id;
+	var recipient = req.body.friend;
+	var friendship = new db.Friendship({
+		friend1: sender,
+		friend2: recipient,
+		level: "unconfirmed"
+	}).save().then(function(friendship){
+		res.send(friendship);
+	}).catch(function(err) {
+	  res.status(400).send('User cannot be saved');
 	});
 });
 
