@@ -15,7 +15,7 @@ var port = process.env.PORT || 8081
 
 app.get('/', function (req, res) {
 	db.User.find({}).then(function(users) {
-		res.send('This is working!!! DB contains:\n' + users);
+		res.send('This is working well!!! DB contains:\n' + users);
 	}).catch(function (err) {
 		res.status(400).send('DB failed');
 	});
