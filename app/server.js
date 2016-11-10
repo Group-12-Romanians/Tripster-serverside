@@ -49,7 +49,7 @@ app.post('/new_user', function(req, res) {
 		new: true,
 		upsert: true,
 	}).then(function(user) {
-		res.send(user._id);
+		res.send(user);
 	}).catch(function (err) {
 		res.status(400).send('Error while saving user: ' + err);
 	});
@@ -98,7 +98,7 @@ app.post('/friend_request', function(req, res) {
 	}).save().then(function(friendship){
 		res.send(friendship);
 	}).catch(function(err) {
-	  res.status(400).send('User cannot be saved');
+	  res.status(400).send('User cannot be saved: ' + err);
 	});
 });
 
