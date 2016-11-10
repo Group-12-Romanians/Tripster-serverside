@@ -41,13 +41,14 @@ app.get('/all_users', function(req, res) {
 });
 
 app.post('/new_user', function(req, res) {
-	var id = req.body.id;
-	var name = req.body.name;
-	console.log("New user with id: " + id + " and name: " + name);
-	new db.User({
-		user_id: id,
-		name: name
-	}).save().then(function(user) {
+	var user = {
+		user_id: req.body.id,
+		name: req.body.name
+	};
+	db.User.findOneAndUpdate(user, user, {
+		new: true,
+		upsert: true,
+	}).then(function(user) {
 		res.send(user._id);
 	}).catch(function (err) {
 		res.status(400).send('Error while saving user: ' + err);
