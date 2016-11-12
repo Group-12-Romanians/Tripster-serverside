@@ -147,7 +147,12 @@ app.get('/my_friends', function(req, res) {
 			{level: "confirmed"}
 		]
 	}).then(function(doc) {
-		res.send(doc);
+		res.send(doc.map(function(friendship) {
+			if (friendship.friend1 === user_id) {
+				return friendship.friend2;
+			} else {
+				return friendship.friend1;
+		});
 	}).catch(function(err) {
 		res.status(500).send('Error while getting my_friends' + err);
 	});
