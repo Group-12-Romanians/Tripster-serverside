@@ -21,15 +21,52 @@ app.get('/', function (req, res) {
 	});
 });
 
-app.get('/locations', function(req, res) {
-	res.send(places);
+app.get('/trips', function(req, res) {
+	db.Trip.find({}).then(function(trips) {
+		res.send(trips);
+	}).catch(function(err) {
+		res.status(500).send('Error while getting trips:' + err);	
+	});
 });
 
 app.post('/sync_locations', function(req, res) {
+	var obj = {trip_id: req.query.trip_id};
+	var user_id = req.query.user_id;
 	var locations = req.body.locations;
-	console.log("locations: " + locations);
-	places += locations;
-	res.send("OK!");
+	var lines = locations.split('\n');
+	var trip_name = lines[0];
+	var evnts = [];
+	for(let i=1; i < lines.length; ++i) {
+		var data = lines[i].split(',');
+		var evnt = {
+			time: data[0],
+			lat: data[1],
+			lng: data[2]
+		};
+		if (data.length > 3) {
+			evnt.img_ids = data.slice(3, data.length);
+		}
+		evnts.push(evnt);
+	}
+	console.log(req.query.trip_id);
+	db.Trip.findOneAndUpdate(obj, {
+		trip_id: req.query.trip_id,
+		name: trip_name,
+		owner: user_id
+	}, {new: true, upsert: true}).then(function(doc) {
+		console.log(doc.events);
+		console.log(evnts);
+		doc.events = doc.events.concat(evnts);
+		console.log(doc.events);
+		db.Trip.findOneAndUpdate(obj, doc, {new: true})
+		.then(function(doc) {
+			res.send(doc);
+		}).catch(function(err) {
+			res.status(500).send('Error while inserting events:' + err);
+		});
+	}).catch(function(err) {
+		res.status(500).send('Error while creating trip:' + err);
+	});	
 });
 
 app.get('/all_users', function(req, res) {
@@ -99,6 +136,20 @@ app.post('/friend_request', function(req, res) {
 		res.send(friendship);
 	}).catch(function(err) {
 	  res.status(400).send('User cannot be saved: ' + err);
+	});
+});
+
+app.get('/my_friends', function(req, res) {
+	var user_id = req.query.user_id;
+	db.Friendship.find({
+		$and: [
+			{$or: [{friend1: user_id}, {friend2: user_id}]},
+			{level: "confirmed"}
+		]
+	}).then(function(doc) {
+		res.send(doc);
+	}).catch(function(err) {
+		res.status(500).send('Error while getting my_friends' + err);
 	});
 });
 

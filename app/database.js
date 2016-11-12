@@ -43,7 +43,6 @@ var eventSchema = new Schema({
 	time: {
 		type: Number,
 		required: true,
-		unique: true
 	},
 
 	lat: {
