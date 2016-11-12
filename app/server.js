@@ -36,7 +36,7 @@ app.post('/sync_locations', function(req, res) {
 	var lines = locations.split('\n');
 	var trip_name = lines[0];
 	var evnts = [];
-	for(let i=1; i < lines.length; ++i) {
+	for(var i=1; i < lines.length; ++i) {
 		var data = lines[i].split(',');
 		var evnt = {
 			time: data[0],
