@@ -152,6 +152,7 @@ app.get('/my_friends', function(req, res) {
 				return friendship.friend2;
 			} else {
 				return friendship.friend1;
+			}
 		});
 	}).catch(function(err) {
 		res.status(500).send('Error while getting my_friends' + err);
