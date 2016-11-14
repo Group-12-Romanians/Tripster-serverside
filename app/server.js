@@ -9,7 +9,8 @@ var multer = require('multer');
 var storage = multer.diskStorage({ 
 		destination: path.join(__dirname, '../uploads'),
 		filename: function (req, file, cb) {
-			cb(null, file.originalname)
+			var new_name = req.query.photo_id;
+			cb(null, new_name + '.jpg');
 		}	
 	})
 
@@ -39,11 +40,11 @@ app.get('/trips', function(req, res) {
 });
 
 app.post('/sync_locations', function(req, res) {
-	var obj = {trip_id: req.query.trip_id};
 	var user_id = req.query.user_id;
 	var locations = req.body.locations;
 	var lines = locations.split('\n');
-	var trip_name = lines[0];
+	var trip_id, trip_name = lines[0].split(',');
+	var obj = {trip_id: trip_id};
 	var evnts = [];
 	for(var i=1; i < lines.length; ++i) {
 		var data = lines[i].split(',');
