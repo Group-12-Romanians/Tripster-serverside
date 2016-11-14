@@ -5,9 +5,18 @@ var url = require('url');
 var path = require('path');
 var db = require('./database');
 var mongoose = require('mongoose');
+var multer = require('multer');
+var storage = multer.diskStorage({ 
+		destination: path.join(__dirname, '../uploads'),
+		filename: function (req, file, cb) {
+			cb(null, file.originalname)
+		}	
+	})
+
+var upload = multer( {storage: storage }).single('photo');
 mongoose.Promise = global.Promise;
 var app = express();
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, '../uploads')));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true })); 
 
@@ -159,6 +168,38 @@ app.get('/my_friends', function(req, res) {
 	});
 });
 
+app.post('/photos/upload', function(req, res, next) {
+	upload(req, res, function(err) {
+		if (err) {
+			res.send("Error occured while uploading photo!");
+		} else {
+			res.send("Photo uploaded successfully!");
+			//console.log(req.file);
+			//console.log(req.body);
+		}
+	}); 
+});
+
+app.get('/my_trips', function(req, res) {
+	var user_id = req.query.user_id;
+	
+	db.Trip.find({ owner: user_id }).then(function(doc) {
+		res.send(doc);
+	}).catch(function(err) {
+		res.status(500).send('Error while fetching my_trips' + err);
+	});
+});
+
+app.get('/get_trip', function(req, res) {
+	var trip_id = req.query.trip_id;
+
+	db.Trip.find({ trip_id: trip_id }).then(function(doc) {
+		res.send(doc);
+	}).catch(function(err) {
+		res.status(500).send('Error whille fetching trip data' + err);
+	});
+});
+		
 var startServer = function() {
 	var dbUrl = 'mongodb://146.169.46.220:27017';
 	mongoose.connect(dbUrl);
