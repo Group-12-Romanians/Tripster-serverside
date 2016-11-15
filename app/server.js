@@ -172,7 +172,7 @@ app.get('/my_friends', function(req, res) {
 app.post('/photos/upload', function(req, res, next) {
 	upload(req, res, function(err) {
 		if (err) {
-			res.send("Error occured while uploading photo!");
+			res.status(500).send("Error occured while uploading photo!");
 		} else {
 			res.send("Photo uploaded successfully!");
 			//console.log(req.file);
@@ -185,7 +185,19 @@ app.get('/my_trips', function(req, res) {
 	var user_id = req.query.user_id;
 	
 	db.Trip.find({ owner: user_id }).then(function(doc) {
-		res.send(doc);
+		var result = {
+			name: doc.name,
+			trip_id: doc.trip_id,
+			owner: doc.owner,
+			preview: ""
+		};
+		for (var i = 0; i < doc.events.length; i++) {
+			if (doc.events[i].img_ids.length > 0) {
+				result.preview = doc.events[i].img_ids[0];
+				break;
+			}
+		}
+		res.send(result);
 	}).catch(function(err) {
 		res.status(500).send('Error while fetching my_trips' + err);
 	});
