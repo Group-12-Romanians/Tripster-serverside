@@ -209,7 +209,7 @@ app.get('/my_trips', function(req, res) {
 app.get('/get_trip', function(req, res) {
 	var trip_id = req.query.trip_id;
 
-	db.Trip.find({ trip_id: trip_id }).then(function(doc) {
+	db.Trip.findOne({ trip_id: trip_id }).then(function(doc) {
 		res.send(doc);
 	}).catch(function(err) {
 		res.status(500).send('Error whille fetching trip data' + err);
