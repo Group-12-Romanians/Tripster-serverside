@@ -185,19 +185,22 @@ app.get('/my_trips', function(req, res) {
 	var user_id = req.query.user_id;
 	
 	db.Trip.find({ owner: user_id }).then(function(doc) {
-		var result = {
-			name: doc.name,
-			trip_id: doc.trip_id,
-			owner: doc.owner,
-			preview: ""
-		};
-		for (var i = 0; i < doc.events.length; i++) {
-			if (doc.events[i].img_ids.length > 0) {
-				result.preview = doc.events[i].img_ids[0];
-				break;
+		var tripPreviews = doc.map(function(trip) {
+			var result = {
+				name: trip.name,
+				trip_id: trip.trip_id,
+				owner: trip.owner,
+				preview: ""
+			};
+			for (var i = 0; i < trip.events.length; i++) {
+				if (trip.events[i].img_ids.length > 0) {
+					result.preview = trip.events[i].img_ids[0];
+					break;
+				}
 			}
-		}
-		res.send(result);
+			return result;
+		});
+		res.send(tripPreviews);
 	}).catch(function(err) {
 		res.status(500).send('Error while fetching my_trips' + err);
 	});
