@@ -39,14 +39,13 @@ app.get('/trips', function(req, res) {
 	});
 });
 
-app.post('/sync_locations', function(req, res) {
+app.post('/new_trip', function(req, res) {
 	var user_id = req.query.user_id;
 	var locations = req.body.locations;
 	var lines = locations.split('\n');
-	var trip_id, trip_name = lines[0].split(',');
-	var obj = {trip_id: trip_id};
+	var trip_info = lines[0].split(',');
 	var evnts = [];
-	for(var i=1; i < lines.length; ++i) {
+	for(var i = 1; i < lines.length; ++i) {
 		var data = lines[i].split(',');
 		var evnt = {
 			time: data[0],
@@ -58,25 +57,16 @@ app.post('/sync_locations', function(req, res) {
 		}
 		evnts.push(evnt);
 	}
-	console.log(req.query.trip_id);
-	db.Trip.findOneAndUpdate(obj, {
-		trip_id: req.query.trip_id,
-		name: trip_name,
-		owner: user_id
-	}, {new: true, upsert: true}).then(function(doc) {
-		console.log(doc.events);
-		console.log(evnts);
-		doc.events = doc.events.concat(evnts);
-		console.log(doc.events);
-		db.Trip.findOneAndUpdate(obj, doc, {new: true})
-		.then(function(doc) {
-			res.send(doc);
-		}).catch(function(err) {
-			res.status(500).send('Error while inserting events:' + err);
-		});
+	var trip = new db.Trip({
+		trip_id: trip_info[0],
+		name: trip_info[1],
+		events: evnts
+	});
+	trip.save().then(function(doc) {
+		res.send(doc);
 	}).catch(function(err) {
-		res.status(500).send('Error while creating trip:' + err);
-	});	
+		res.status(500).send("Could not save new trip:" + err);
+	});
 });
 
 app.get('/all_users', function(req, res) {
