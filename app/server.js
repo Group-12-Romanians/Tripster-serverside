@@ -62,6 +62,7 @@ app.post('/new_trip', function(req, res) {
 		name: trip_info[1],
 		events: evnts
 	});
+	console.log(trip);
 	trip.save().then(function(doc) {
 		res.send(doc);
 	}).catch(function(err) {
