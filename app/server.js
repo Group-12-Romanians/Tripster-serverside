@@ -60,6 +60,7 @@ app.post('/new_trip', function(req, res) {
 	var trip = new db.Trip({
 		trip_id: trip_info[0],
 		name: trip_info[1],
+		owner: user_id,
 		events: evnts
 	});
 	console.log(trip);
