@@ -47,15 +47,17 @@ app.post('/new_trip', function(req, res) {
 	var evnts = [];
 	for(var i = 1; i < lines.length; ++i) {
 		var data = lines[i].split(',');
-		var evnt = {
-			time: data[0],
-			lat: data[1],
-			lng: data[2]
-		};
-		if (data.length > 3) {
-			evnt.img_ids = data.slice(3, data.length);
+		if (data.length > 2) {
+			var evnt = {
+				time: data[0],
+				lat: data[1],
+				lng: data[2]
+			};
+			if (data.length > 3) {
+				evnt.img_ids = data.slice(3, data.length);
+			}
+			evnts.push(evnt);
 		}
-		evnts.push(evnt);
 	}
 	var trip = new db.Trip({
 		trip_id: trip_info[0],
@@ -67,6 +69,7 @@ app.post('/new_trip', function(req, res) {
 	trip.save().then(function(doc) {
 		res.send(doc);
 	}).catch(function(err) {
+		console.log(err);
 		res.status(500).send("Could not save new trip:" + err);
 	});
 });
