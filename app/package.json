@@ -12,6 +12,7 @@
     "mongodb": "^2.2.11",
     "mongoose": "^4.6.5",
     "multer": "^1.2.0",
+    "node-uuid": "^1.4.7",
     "promise": "^7.1.1"
   }
 }
