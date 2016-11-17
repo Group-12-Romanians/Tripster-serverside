@@ -70,6 +70,10 @@ var tripSchema = new Schema({
 		required: true
 	},
 
+	preview_img: String, // actually only id of the pic in uploads
+
+	preview_video: String, // actually only the id of the video in uploads
+
 	name: String,
 
 	owner: {

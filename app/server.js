@@ -67,6 +67,8 @@ app.post('/new_trip', function(req, res) {
 	var trip = new db.Trip({
 		trip_id: trip_info[0],
 		name: trip_info[1],
+		preview_img: "1234",
+		preview_video: "v.mp4",
 		owner: user_id,
 		events: evnts
 	});
