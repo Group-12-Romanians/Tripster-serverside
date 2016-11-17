@@ -10,28 +10,14 @@ var db = require('./database');
 var mongoose = require('mongoose');
 var multer = require('multer');
 var storage = multer.diskStorage({ 
-destination: path.join(__dirname, '../uploads'),
-filename: function (req, file, cb) {
-var new_name = req.query.photo_id;
-cb(null, new_name + '.jpg');
-}
-})
+	destination: path.join(__dirname, '../uploads'),
+	filename: function (req, file, cb) {
+		var new_name = req.query.photo_id;
+		cb(null, new_name + '.jpg');
+	}
+});
 
 var upload = multer( {storage: storage }).single('photo');
-var videoshow = require('videoshow');
-
-var video_options = {
-  fps: 25,
-  loop: 3, // seconds
-  transition: false,
-  transitionDuration: 1, // seconds
-  videoBitrate: 1024,
-  videoCodec: 'libx264',
-  size: '640x?',
-  audioBitrate: '128k',
-  audioChannels: 2,
-  format: 'mp4'
-};
 
 mongoose.Promise = global.Promise;
 var app = express();
@@ -60,7 +46,7 @@ app.get('/trips', function(req, res) {
 	}).then(function(trips) {
 		res.send(trips);
 	}).catch(function(err) {
-		res.status(500).send('Error while getting trips:' + err);	
+		res.status(500).send('Error whilie getting trips:' + err);	
 	});
 });
 
@@ -91,7 +77,9 @@ app.post('/new_trip', function(req, res) {
 	}
 	
 	var preview_img_name = uuid.v4();
+	var preview_image_path = path.join(__dirname, '../uploads', preview_img_name + '.jpg');
 	var video_name = uuid.v4() + '.mp4';
+	var video_path = path.join(__dirname, '../uploads', video_name);
 	var trip = new db.Trip({
 		trip_id: trip_info[0],
 		name: trip_info[1],
@@ -104,7 +92,23 @@ app.post('/new_trip', function(req, res) {
 	res.send(trip);
 
 	var video_thread = spawn(function create_video(input, done) {
-		var fs = input.fs, request = input.request;
+		
+		var video_options = {
+  			fps: 25,
+  			loop: 3, // seconds
+  			transition: true,
+  			transitionDuration: 1, // seconds
+  			videoBitrate: 1024,
+ 		 	videoCodec: 'libx264',
+  			size: '640x?',
+  			audioBitrate: '128k',
+  			audioChannels: 2,
+  			format: 'mp4'
+		};
+
+		var fs = require('fs'); 
+		var request = require('request');
+		var videoshow = require('videoshow');
 		var coords_path = input.coords.map(function path_point(latlong) {
 							return '|' + latlong;
 						})
@@ -116,11 +120,12 @@ app.post('/new_trip', function(req, res) {
 				+ '&size=640x640&path=color:0x0000ff|weight:5' 
 				+ coords_path;
 	
-		var preview_image_path = path.join(__dirname, '../uploads', input.preview_img_name + '.jpg');
+		var preview_image_path = input.preview_image_path;
                 request(url).pipe(fs.createWriteStream(preview_image_path));
+		console.log(preview_image_path);
 		var video_images = [preview_image_path].concat(input.images);
-
-		var video_path = path.join(__dirname, '../uploads', input.video_name);
+		console.log(video_images);
+		var video_path = input.video_path;
 		videoshow(video_images, video_options)
 		.save(video_path)
 		.on('start', function() {
@@ -134,30 +139,27 @@ app.post('/new_trip', function(req, res) {
 					+ ', now adding to db.');
 		});
 
-		input.trip.save().then(function(doc) {
-			console.log('Successfully saved ' + doc);
-		}).catch(function(err) {
-			console.log(err);
-		});
-
 		done();
 	});
 
 	video_thread
 	.send({
-		fs: fs,
-		request: request,
-
 		GOOGLE_API_KEY: GOOGLE_API_KEY,
-
+		
 		preview_img_name: preview_img_name,
+		preview_image_path: preview_image_path,
 		video_name: video_name,
+		video_path: video_path,
 		coords: coords,
-		images: images,
-		trip: trip
+		images: images
 	})
 	.on('message', function() {
 		video_thread.kill();
+		trip.save().then(function(doc) {
+			console.log('Successfully saved ' + doc);
+		}).catch(function(err) {
+			console.log(err);
+		});
 	})
 	.on('error', function(err) {
 		console.error('Video writing thread error: ', err);
