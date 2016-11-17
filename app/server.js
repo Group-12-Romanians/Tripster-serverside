@@ -32,7 +32,12 @@ app.get('/', function (req, res) {
 });
 
 app.get('/trips', function(req, res) {
-	db.Trip.find({}).then(function(trips) {
+	db.Trip.aggregate().lookup({
+		from: 'users', 
+		localField: 'owner', 
+		foreignField:'_id',
+		as: 'user'
+	}).then(function(trips) {
 		res.send(trips);
 	}).catch(function(err) {
 		res.status(500).send('Error while getting trips:' + err);	
