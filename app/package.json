@@ -9,11 +9,13 @@
     "body-parser": "^1.15.2",
     "express": "3.x",
     "forever": "^0.15.3",
+    "gm": "^1.23.0",
     "mongodb": "^2.2.11",
     "mongoose": "^4.6.5",
     "multer": "^1.2.0",
     "node-uuid": "^1.4.7",
     "promise": "^7.1.1",
+    "sharp": "^0.16.2",
     "threads": "^0.7.2"
   }
 }

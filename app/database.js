@@ -11,7 +11,9 @@ var userSchema = new Schema({
 	name: {
 		type: String,
 		required: true
-	}
+	},
+
+	avatar: String
 });
 var User = mongoose.model('User', userSchema);
 

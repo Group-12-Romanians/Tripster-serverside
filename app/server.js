@@ -1,6 +1,7 @@
 var express = require('express');
 var bodyParser = require('body-parser');
 var fs = require('fs');
+var gm = require('gm');
 var request = require('request');
 var url = require('url');
 var uuid = require('node-uuid');
@@ -91,79 +92,52 @@ app.post('/new_trip', function(req, res) {
 
 	res.send(trip);
 
-	var video_thread = spawn(function create_video(input, done) {
-		
-		var video_options = {
-  			fps: 25,
-  			loop: 3, // seconds
-  			transition: true,
-  			transitionDuration: 1, // seconds
-  			videoBitrate: 1024,
- 		 	videoCodec: 'libx264',
-  			size: '640x?',
-  			audioBitrate: '128k',
-  			audioChannels: 2,
-  			format: 'mp4'
-		};
+	var video_options = {
+		fps: 25,
+		loop: 3, // seconds
+		transition: true,
+		transitionDuration: 1, // seconds
+		videoBitrate: 1024,
+	 	videoCodec: 'libx264',
+		size: '640x?',
+		format: 'mp4'
+	};
 
-		var fs = require('fs'); 
-		var request = require('request');
-		var videoshow = require('videoshow');
-		var coords_path = input.coords.map(function path_point(latlong) {
-							return '|' + latlong;
-						})
-					      .reduce(function compute_path(acc, point) {
-							return acc + point;
-						});   	
-		var url = 'https://maps.googleapis.com/maps/api/staticmap?key=' 
-				+ input.GOOGLE_API_KEY 
-				+ '&size=640x640&path=color:0x0000ff|weight:5' 
-				+ coords_path;
-	
-		var preview_image_path = input.preview_image_path;
-                request(url).pipe(fs.createWriteStream(preview_image_path));
-		console.log(preview_image_path);
-		var video_images = [preview_image_path].concat(input.images);
-		console.log(video_images);
-		var video_path = input.video_path;
-		videoshow(video_images, video_options)
-		.save(video_path)
-		.on('start', function() {
-			console.log('Started writing video ' + input.video_name);
-		})
-		.on('error', function(err) {
-			console.error('Error while writing video ' + input.video_name, err);
-		})
-		.on('end', function() {
-			console.log('Finished writing video ' + input.video_name 
-					+ ', now adding to db.');
-		});
+	var fs = require('fs'); 
+	var request = require('request');
+	var videoshow = require('videoshow');
+	var coords_path = coords.map(function path_point(latlong) {
+						return '|' + latlong;
+					})
+				      .reduce(function compute_path(acc, point) {
+						return acc + point;
+					});   	
+	var url = 'https://maps.googleapis.com/maps/api/staticmap?format=jpg&key=' 
+			+ GOOGLE_API_KEY 
+			+ '&size=640x440&path=color:0x0000ff|weight:5' 
+			+ coords_path;
 
-		done();
-	});
-
-	video_thread
-	.send({
-		GOOGLE_API_KEY: GOOGLE_API_KEY,
-		
-		preview_img_name: preview_img_name,
-		preview_image_path: preview_image_path,
-		video_name: video_name,
-		video_path: video_path,
-		coords: coords,
-		images: images
+  request(url).pipe(fs.createWriteStream(preview_image_path));
+	console.log(preview_image_path);
+	var video_images = images;
+	console.log(video_images);
+	videoshow(video_images, video_options)
+	.save(video_path)
+	.on('start', function() {
+		console.log('Started writing video ' + video_name);
 	})
-	.on('message', function() {
-		video_thread.kill();
+	.on('error', function(err) {
+		console.error('Error while writing video ' + video_name, err);
+	})
+	.on('end', function() {
+		console.log('Finished writing video ' + video_name 
+				+ ', now adding to db.');
 		trip.save().then(function(doc) {
 			console.log('Successfully saved ' + doc);
 		}).catch(function(err) {
 			console.log(err);
 		});
-	})
-	.on('error', function(err) {
-		console.error('Video writing thread error: ', err);
-	})	
+	});
 });
 
 app.get('/all_users', function(req, res) {
@@ -177,9 +151,10 @@ app.get('/all_users', function(req, res) {
 app.post('/new_user', function(req, res) {
 	var user = {
 		user_id: req.body.id,
-		name: req.body.name
+		name: req.body.name,
+		avatar: req.body.avatar
 	};
-	db.User.findOneAndUpdate(user, user, {
+	db.User.findOneAndUpdate({user_id: req.body.id}, user, {
 		new: true,
 		upsert: true,
 	}).then(function(user) {
@@ -245,7 +220,7 @@ app.get('/my_friends', function(req, res) {
 		]
 	}).then(function(doc) {
 		res.send(doc.map(function(friendship) {
-			if (friendship.friend1 === user_id) {
+			if (friendship.friend1 == user_id) {
 				return friendship.friend2;
 			} else {
 				return friendship.friend1;
@@ -257,16 +232,43 @@ app.get('/my_friends', function(req, res) {
 });
 
 app.post('/photos/upload', function(req, res, next) {
-	upload(req, res, function(err) {
+	upload(req, res, function(err, new_path) {
 		if (err) {
 			res.status(500).send("Error occured while uploading photo!");
 		} else {
-			res.send("Photo uploaded successfully!");
-			//console.log(req.file);
-			//console.log(req.body);
+			res.send("Photo uploaded successfully!" + new_path);
 		}
-	}); 
+	});
 });
+
+function resize_img(new_path) {
+	var canvasWidth = 640;
+	var canvasHeight = 440;
+	gm(path.join(__dir_name, "../uploads", new_path)).size(function(error, size) {
+		if (error) {
+			console.error(error);
+		} else {
+			// current image size
+			var imageWidth = size.width;
+			var imageHeight = size.height;
+			// center placement
+			var x = (canvasWidth / 2) - (imageWidth / 2);
+ 			var y = (canvasHeight / 2) - (imageHeight / 2);
+ 			this.background('#000000')
+			.resize(imageWidth, imageHeight)
+			.gravity('Center')
+			.extent(canvasWidth, canvasHeight)
+ 			.write(path.join(__dirname, "../uploads", new_path), function(error) {
+ 				if (error) {
+   				console.error(error);
+				} else {
+					console.log(this.outname);
+				}
+			});
+  	}
+	});
+
+}
 
 app.get('/my_trips', function(req, res) {
 	var user_id = req.query.user_id;
