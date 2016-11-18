@@ -274,7 +274,7 @@ app.get('/my_trips', function(req, res) {
 	var user_id = req.query.user_id;
 	
 	db.Trip.find({ owner: user_id }).then(function(doc) {
-		res.send(tripPreviews);
+		res.send(doc);
 	}).catch(function(err) {
 		res.status(500).send('Error while fetching my_trips' + err);
 	});
