@@ -164,6 +164,15 @@ app.post('/new_user', function(req, res) {
 	});
 });
 
+app.get('/sent_requests', function(req, res) {
+	db.Friendship.find({friend1: req.query.user_id, level: "unconfirmed"})
+	.then(function(friendship) {
+		res.send(friendship);
+	}).catch(function(err) {
+		res.status(400).send('Error while getting pending requests.');
+	});
+});
+
 app.get('/notifications/requests', function(req, res) {
 	db.Friendship.find({friend2: req.query.user_id, level: "unconfirmed"})
 	.then(function(friendship) {
