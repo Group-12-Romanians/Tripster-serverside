@@ -1,4 +1,6 @@
 var express = require('express');
+var nano = require('nano')('http://146.169.46.220:6984');
+var couchdb = nano.db.use('tripster');
 var bodyParser = require('body-parser');
 var fs = require('fs');
 var gm = require('gm');
@@ -7,8 +9,6 @@ var url = require('url');
 var uuid = require('node-uuid');
 var spawn = require('threads').spawn;
 var path = require('path');
-var db = require('./database');
-var mongoose = require('mongoose');
 var multer = require('multer');
 var storage = multer.diskStorage({ 
 	destination: path.join(__dirname, '../uploads'),
@@ -20,35 +20,88 @@ var storage = multer.diskStorage({
 
 var upload = multer( {storage: storage }).single('photo');
 
-mongoose.Promise = global.Promise;
 var app = express();
 var GOOGLE_API_KEY = 'AIzaSyBEcADKicF0ZeIooOSbh12Vu7BVyDOIjik';
+// custom couchdb update function
+couchdb.update = function(obj, key, callback){
+ var db = this;
+ db.get(key, function (error, existing){ 
+    if(!error) obj._rev = existing._rev;
+    db.insert(obj, key, callback);
+ });
+}
+
 
 app.use(express.static(path.join(__dirname, '../uploads')));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true })); 
 
 var port = process.env.PORT || 8081
+var serverUrl = 'http://146.169.46.220:' + port;
 
 app.get('/', function (req, res) {
-	db.User.find({}).then(function(users) {
-		res.send('This is working well!!! DB contains:\n' + users);
-	}).catch(function (err) {
-		res.status(400).send('DB failed');
+	couchdb.view('users', 'byName', function(err, body) {
+  		if (!err) {
+			
+			res.send('DB is fine: ' + JSON.stringify(body));
+  		} else {
+			res.status(500).send('DB is not fine: '+ err);	
+		}
 	});
 });
 
-app.get('/trips', function(req, res) {
-	db.Trip.aggregate().lookup({
-		from: 'users', 
-		localField: 'owner', 
-		foreignField:'_id',
-		as: 'user'
-	}).then(function(trips) {
-		res.send(trips);
-	}).catch(function(err) {
-		res.status(500).send('Error whilie getting trips:' + err);	
-	});
+app.get('/places', function (req, res) {
+	couchdb.view('places', 'byTrip', {'key' : req.query.tripId}, 
+							function(err, body) {
+		if (!err) {
+			var rawPlaces = body.rows;
+			var placesCoordsPath = rawPlaces
+				.map(function getPlace(rawPlace) {
+					return {
+						lat: rawPlace.value.lat,
+						lng: rawPlace.value.lng,
+						time: rawPlace.value.time
+						}
+					})
+				.sort(function sortPlacesByTime(placeA, placeB) {
+					return placeA.time - placeB.time;
+					})
+				.reduce(function getCoordsString(pathAcc, place) {
+					return pathAcc + '|' + place.lat + ',' + place.lng;
+					}, '');
+			if (placesCoordsPath === '') {
+				res.status(500).send("No places in requested trip; no preview available");
+				return;
+			}
+			var url = 'https://maps.googleapis.com/maps/api/staticmap?format=jpg&key=' 
+				+ GOOGLE_API_KEY 
+				+ '&size=640x440&path=color:0x0000ff|weight:5' 
+				+ placesCoordsPath;
+			var preview_img_name = uuid.v4() + '.jpg';
+			var preview_image_path = path.join(__dirname, '../uploads', preview_img_name);
+                        request(url).pipe(fs.createWriteStream(preview_image_path));
+
+			couchdb.view('trips', 'byId', {'key' : req.query.tripId}, function(err, body) {
+				if (!err) {
+					var id  = body.rows[0].id;
+					var doc = body.rows[0].value;
+					doc.preview = serverUrl + '/' + preview_img_name;
+					
+					couchdb.update(doc, id, function(err, result) {
+						if (!err) {
+							res.send(JSON.stringify(doc));
+						} else {
+							res.status(500).send('Error while updating doc: ' + err);
+						}
+					});
+				} else {
+					res.status(500).send('Error in DB query: ' + err);
+				}
+			});
+                } else {
+                        res.status(500).send('DB is not fine: '+ err);
+                }
+        });
 });
 
 app.post('/new_trip', function(req, res) {
@@ -140,106 +193,6 @@ app.post('/new_trip', function(req, res) {
 	});
 });
 
-app.get('/all_users', function(req, res) {
-	db.User.find({}).then(function(all_users) {
-		res.send(all_users);
-	}).catch(function(err){
-		res.status(400).send('Error while getting all users:' + err);
-	});
-});
-
-app.post('/new_user', function(req, res) {
-	var user = {
-		user_id: req.body.id,
-		name: req.body.name,
-		avatar: req.body.avatar
-	};
-	db.User.findOneAndUpdate({user_id: req.body.id}, user, {
-		new: true,
-		upsert: true,
-	}).then(function(user) {
-		res.send(user);
-	}).catch(function (err) {
-		res.status(400).send('Error while saving user: ' + err);
-	});
-});
-
-app.get('/sent_requests', function(req, res) {
-	db.Friendship.find({friend1: req.query.user_id, level: "unconfirmed"})
-	.then(function(friendship) {
-		res.send(friendship);
-	}).catch(function(err) {
-		res.status(400).send('Error while getting pending requests.');
-	});
-});
-
-app.get('/notifications/requests', function(req, res) {
-	db.Friendship.find({friend2: req.query.user_id, level: "unconfirmed"})
-	.then(function(friendship) {
-		res.send(friendship);
-	}).catch(function(err) {
-		res.status(400).send('Error while getting pending requests.');
-	});
-});
-
-app.post('/friend_response', function(req, res) {
-	var friendship = {
-		friend2: req.query.user_id,
-		friend1: req.body.friend,
-		level: "unconfirmed"
-	}
-	var stat = req.body.stat;
-	if(stat==="confirmed") {
-		db.Friendship.findOneAndUpdate(friendship, {
-				level: "confirmed"}, {upsert: false, new: true})
-		.then(function(doc) {
-			res.send(doc);
-		}).catch(function(err) {
-			res.status(400).send("Error when confirming friendship");
-		});
-	} else {
-		db.Friendship.remove(friendship).then(function() {
-			res.send("OK");
-		}).catch(function(err){
-			res.status(400).send("Error when removing friendship: " + err);
-		});
-	}
-});
-
-app.post('/friend_request', function(req, res) {
-	var sender = req.query.user_id;
-	var recipient = req.body.friend;
-	var friendship = new db.Friendship({
-		friend1: sender,
-		friend2: recipient,
-		level: "unconfirmed"
-	}).save().then(function(friendship){
-		res.send(friendship);
-	}).catch(function(err) {
-	  res.status(400).send('User cannot be saved: ' + err);
-	});
-});
-
-app.get('/my_friends', function(req, res) {
-	var user_id = req.query.user_id;
-	db.Friendship.find({
-		$and: [
-			{$or: [{friend1: user_id}, {friend2: user_id}]},
-			{level: "confirmed"}
-		]
-	}).then(function(doc) {
-		res.send(doc.map(function(friendship) {
-			if (friendship.friend1 == user_id) {
-				return friendship.friend2;
-			} else {
-				return friendship.friend1;
-			}
-		}));
-	}).catch(function(err) {
-		res.status(500).send('Error while getting my_friends' + err);
-	});
-});
-
 app.post('/photos/upload', function(req, res, next) {
 	upload(req, res, function(err, new_path) {
 		if (err) {
@@ -278,39 +231,6 @@ function resize_img(new_path) {
 	});
 
 }
-
-app.get('/my_trips', function(req, res) {
-	var user_id = req.query.user_id;
 	
-	db.Trip.find({ owner: user_id }).then(function(doc) {
-		res.send(doc);
-	}).catch(function(err) {
-		res.status(500).send('Error while fetching my_trips' + err);
-	});
-});
-
-app.get('/get_trip', function(req, res) {
-	var trip_id = req.query.trip_id;
-
-	db.Trip.findOne({ trip_id: trip_id }).then(function(doc) {
-		res.send(doc);
-	}).catch(function(err) {
-		res.status(500).send('Error whille fetching trip data' + err);
-	});
-});
-		
-var startServer = function() {
-	var dbUrl = 'mongodb://146.169.46.220:27017';
-	mongoose.connect(dbUrl);
-	
-	var server = app.listen(port);
-	console.log('Server running now on port: ' + port);
-	
-	server.on('close', function() {
-		return mongoose.connection.close();
-	});
-
-	return server;
-};
-
-startServer();
+app.listen(port);
+console.log('Server running now on port: ' + port);
