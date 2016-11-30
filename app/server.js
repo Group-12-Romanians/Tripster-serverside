@@ -75,7 +75,7 @@ app.get('/places', function (req, res) {
 			}
 			var url = 'https://maps.googleapis.com/maps/api/staticmap?format=jpg&key=' 
 				+ GOOGLE_API_KEY 
-				+ '&size=640x440&path=color:0x0000ff|weight:5' 
+				+ '&size=640x640&path=color:0x0000ff|weight:5' 
 				+ placesCoordsPath;
 			var preview_img_name = uuid.v4() + '.jpg';
 			var preview_image_path = path.join(__dirname, '../uploads', preview_img_name);
@@ -85,6 +85,17 @@ app.get('/places', function (req, res) {
 				if (!err) {
 					var id  = body.rows[0].id;
 					var doc = body.rows[0].value;
+					
+					var currPreviewName = doc.preview.substring(serverUrl.length + 1);
+					var currPreviewPath = path.join(__dirname, '../uploads', currPreviewName);
+					fs.unlink(currPreviewPath, function afterRemoval(err) {
+						if (err) {
+							console.log('Error ocurred while deleting old preview: ' + err);
+						} else {
+							console.log('Old preview deleted successfully.');
+						}
+					});
+
 					doc.preview = serverUrl + '/' + preview_img_name;
 					
 					couchdb.update(doc, id, function(err, result) {
