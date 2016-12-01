@@ -22,6 +22,11 @@ var upload = multer( {storage: storage }).single('photo');
 
 var app = express();
 var GOOGLE_API_KEY = 'AIzaSyBEcADKicF0ZeIooOSbh12Vu7BVyDOIjik';
+
+var startFlagUrl = 'https://goo.gl/C0MLvo';
+var finishFlagUrl = 'https://goo.gl/Hw19xb';
+var visitedPlaceFlagUrl = 'https://goo.gl/vFzMea';
+
 // custom couchdb update function
 couchdb.update = function(obj, key, callback){
  var db = this;
@@ -51,32 +56,50 @@ app.get('/', function (req, res) {
 });
 
 app.get('/places', function (req, res) {
-	couchdb.view('places', 'byTrip', {'key' : req.query.tripId}, 
-							function(err, body) {
+	couchdb.view('places', 'byTrip', {'key' : req.query.tripId}, function(err, body) {
 		if (!err) {
 			var rawPlaces = body.rows;
-			var placesCoordsPath = rawPlaces
-				.map(function getPlace(rawPlace) {
-					return {
+			var visitedPlacesIds = {};
+			var computedPlaces = {};
+			var places = rawPlaces.forEach(function getPlace(rawPlace) {
+				if (rawPlace.value.placeId) {
+					visitedPlacesIds[rawPlace.value.placeId] = 1;
+				} else {
+					computedPlaces[rawPlace.value._id] = {
 						lat: rawPlace.value.lat,
 						lng: rawPlace.value.lng,
-						time: rawPlace.value.time
-						}
-					})
-				.sort(function sortPlacesByTime(placeA, placeB) {
-					return placeA.time - placeB.time;
-					})
-				.reduce(function getCoordsString(pathAcc, place) {
-					return pathAcc + '|' + place.lat + ',' + place.lng;
-					}, '');
-			if (placesCoordsPath === '') {
-				res.status(500).send("No places in requested trip; no preview available");
-				return;
-			}
+						time: rawPlace.value.time	
+					};
+				}
+			});
+			
+			var sortedPlaces = Object.keys(computedPlaces)
+			.map(function getValue(key) { return computedPlaces[key]; })
+			.sort(sortPlacesByTime);
+			
+			var placesCoordsPath = sortedPlaces.reduce(function getUrlCoords(acc, place) {
+				return acc + '|' + place.lat + ',' + place.lng;
+			}, '');
+
+			var startPlaceCoords = '|' + sortedPlaces[0].lat + ',' + sortedPlaces[0].lng;
+			var endPlaceCoords = '|' + sortedPlaces[sortedPlaces.length - 1].lat + ',' + 
+						 sortedPlaces[sortedPlaces.length - 1].lng;
+			var visitedPlacesCoords = Object.keys(visitedPlacesIds)
+			.map(function getVisitedPlace(placeId) {
+				return computedPlaces[placeId];
+			})
+			.reduce(function getVisitedPlacesPath(acc, place) {
+				return acc + '|' + place.lat + ',' + place.lng;
+			}, '');
+				
 			var url = 'https://maps.googleapis.com/maps/api/staticmap?format=jpg&key=' 
 				+ GOOGLE_API_KEY 
 				+ '&size=640x640&path=color:0x0000ff|weight:5' 
-				+ placesCoordsPath;
+				+ placesCoordsPath
+				+ '&markers=icon:' + startFlagUrl + startPlaceCoords
+				+ '&markers=icon:' + finishFlagUrl   + endPlaceCoords
+				+ '&markers=icon:' + visitedPlaceFlagUrl + visitedPlacesCoords;
+			console.log(url);
 			var preview_img_name = uuid.v4() + '.jpg';
 			var preview_image_path = path.join(__dirname, '../uploads', preview_img_name);
                         request(url).pipe(fs.createWriteStream(preview_image_path));
@@ -114,6 +137,16 @@ app.get('/places', function (req, res) {
                 }
         });
 });
+
+function sortPlacesByTime(placeA, placeB) {
+	return placeA.time - placeB.time;
+};
+
+function getVisitedPlaces(tripId) {
+	couchdb.view('test', 'test', {'include_docs' : true}, function(err, body) {
+		console.log(JSON.stringify(body)); 
+	});
+}
 
 app.post('/new_trip', function(req, res) {
 	var user_id = req.query.user_id;
