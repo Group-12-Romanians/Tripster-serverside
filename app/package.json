@@ -9,6 +9,7 @@
     "body-parser": "^1.15.2",
     "express": "3.x",
     "forever": "^0.15.3",
+    "geolib": "^2.0.22",
     "gm": "^1.23.0",
     "mongodb": "^2.2.11",
     "mongoose": "^4.6.5",
