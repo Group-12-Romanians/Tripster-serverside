@@ -122,7 +122,7 @@ app.get('/places', function (req, res) {
 					});
 
 					doc.preview = serverUrl + '/' + preview_img_name;
-					
+					doc.status = "stopped";
 					couchdb.update(doc, id, function(err, result) {
 						if (!err) {
 							res.send(JSON.stringify(doc));
@@ -145,7 +145,7 @@ function computePolylineCoords(places) {
 	var currPath = initPath(places[0]);
 	var currPathSize = 1;
 	var prevPlace = places[0];
-	for (let i = 1; i < places.length; i++) {
+	for (var i = 1; i < places.length; i++) {
 		if (!areNeighbourPlaces(places[i], prevPlace)) {
 			polylineCoords = polylineCoords 
 						+ (currPathSize > 1 ? currPath : '')
