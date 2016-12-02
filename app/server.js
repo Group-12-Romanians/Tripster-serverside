@@ -11,25 +11,6 @@ var uuid = require('node-uuid');
 var spawn = require('threads').spawn;
 var path = require('path');
 var geolib = require('geolib');
-var multer = require('multer');
-var storage = multer.diskStorage({ 
-	destination: path.join(__dirname, '../uploads'),
-	filename: function (req, file, cb) {
-		var new_name = req.query.photo_id;
-		cb(null, new_name + '.jpg');
-	}
-});
-
-var upload = multer( {storage: storage }).single('photo');
-
-var app = express();
-var GOOGLE_API_KEY = 'AIzaSyBEcADKicF0ZeIooOSbh12Vu7BVyDOIjik';
-
-var NEIGHBOUR_PLACES_DISTANCE_LIMIT = 1000; // metres
-
-var startFlagUrl = 'https://goo.gl/IOJ0Sx';
-var finishFlagUrl = 'https://goo.gl/Mnyj3b';
-var visitedPlaceFlagUrl = 'https://goo.gl/uqUiCs';
 
 // custom couchdb update function
 couchdb.update = function(obj, key, callback){
@@ -40,7 +21,71 @@ couchdb.update = function(obj, key, callback){
  });
 }
 
+var multer = require('multer');
 
+var GOOGLE_API_KEY = 'AIzaSyBEcADKicF0ZeIooOSbh12Vu7BVyDOIjik';
+var GooglePlaces = require('node-googleplaces');
+var googlePlaces = new GooglePlaces(GOOGLE_API_KEY);
+
+var storage = multer.diskStorage({ 
+	destination: path.join(__dirname, '../uploads'),
+	filename: function (req, file, cb) {
+		var new_name = req.query.photo_id;
+		searchAndUpdatePlaceName(new_name);	
+		cb(null, new_name + '.jpg');
+	}
+});
+
+function searchAndUpdatePlaceName(photoName)	{
+	couchdb.view(	'places', 
+		     	'byPhotoId', 
+			{
+				key : photoName,
+				include_docs : true
+			} ,
+			function(err, body) {
+				if (err) {
+					console.log('Error in places/byPhotoId view: ', err);
+				} else {
+					addNameToPlaceDoc(body.rows[0].doc);
+				}		
+																	
+	  		});
+}
+
+function addNameToPlaceDoc(doc){
+	var params = {
+		location: doc.lat.toString() + 
+			  	',' + 
+			  doc.lng.toString(),
+		radius: 250,
+		type: 'point_of_interest'
+	};
+	googlePlaces.nearbySearch(params, function updatePlace(err, res) {
+		var placeName = res.body.results[0].name;
+		var photoPlaceDocId = doc._id;
+		doc.name = placeName;
+	
+		couchdb.update(doc, photoPlaceDocId, function(err, result) {
+			if (!err) {
+				console.log(JSON.stringify(doc));
+			} else {
+				console.log('Error while updating doc: ' + err);
+			}
+		});
+
+	});
+}
+
+searchAndUpdatePlaceName('8bd374a7-6204-4a6a-8932-0322d94de2b4');
+var upload = multer( {storage: storage }).single('photo');
+
+var app = express();
+var NEIGHBOUR_PLACES_DISTANCE_LIMIT = 1000; // metres
+
+var startFlagUrl = 'https://goo.gl/IOJ0Sx';
+var finishFlagUrl = 'https://goo.gl/Mnyj3b';
+var visitedPlaceFlagUrl = 'https://goo.gl/uqUiCs';
 app.use(express.static(path.join(__dirname, '../uploads')));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true })); 
