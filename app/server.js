@@ -77,7 +77,6 @@ function addNameToPlaceDoc(doc){
 	});
 }
 
-searchAndUpdatePlaceName('8bd374a7-6204-4a6a-8932-0322d94de2b4');
 var upload = multer( {storage: storage }).single('photo');
 
 var app = express();
@@ -150,8 +149,7 @@ app.get('/places', function (req, res) {
 				+ polylineCoords
 				+ '&markers=icon:' + startFlagUrl + startPlaceCoords
 				+ '&markers=icon:' + finishFlagUrl   + endPlaceCoords;
-				+ (visitedPlacesCoords === '' ? '' :
-					 '&markers=icon:' + visitedPlaceFlagUrl + visitedPlacesCoords);
+				+ '&markers=icon:' + visitedPlaceFlagUrl + visitedPlacesCoords);
 			
 			console.log(url);
 			var preview_img_name = createPreviewImage(url);
