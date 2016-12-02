@@ -111,6 +111,8 @@ app.get('/places', function (req, res) {
 			console.log(url);
 			var preview_img_name = createPreviewImage(url);
 			
+			res.send(preview_img_name);
+				
 			couchdb.view('trips', 'byId', {'key' : req.query.tripId}, function(err, body) {
 				if (!err) {
 					var id  = body.rows[0].id;
@@ -118,32 +120,14 @@ app.get('/places', function (req, res) {
 					
 					var currPreviewName = doc.preview.substring(serverUrl.length + 1);
 					var currPreviewPath = path.join(__dirname, '../uploads', currPreviewName);
+					
 					fs.unlink(currPreviewPath, function afterRemoval(err) {
 						if (err) {
 							console.log('Error ocurred while deleting old preview: ' + err);
 						} else {
 							console.log('Old preview deleted successfully.');
 						}
-	
-					doc.preview = serverUrl + '/' + preview_img_name;
-					doc.status = "stopped";
-					couchdb.update(doc, id, function(err, result) {
-						if (!err) {
-							res.send(JSON.stringify(doc));
-						} else {
-							res.status(500).send('Error while updating doc: ' + err);
-						}
 					});
-				});
-				} else {
-					res.status(500).send('Error in DB query: ' + err);
-				}
-			});
-			
-			couchdb.view('trips', 'byId', {'key' : req.query.tripId}, function(err, body) {
-                                if (!err) {
-                                        var id  = body.rows[0].id;
-                                        var doc = body.rows[0].value;
 					
 					var video_options = {
 						fps: 25,
@@ -188,12 +172,15 @@ app.get('/places', function (req, res) {
 					});
 	
 					doc.video = serverUrl + '/' + video_name;
+					doc.preview = serverUrl + '/' + preview_img_name;
+					doc.status = "stopped";
 					couchdb.update(doc, id, function(err, result) {
 						if (!err) {
-							console.log('Video uploaded successfully!');
+							console.log(JSON.stringify(doc));
 						} else {
-							console.log('Error while uploading video: ' + err);
+							console.log('Error while updating doc: ' + err);
 						}
+			
 					});
                                 } else {
                                         res.status(500).send('Error in DB query: ' + err);
