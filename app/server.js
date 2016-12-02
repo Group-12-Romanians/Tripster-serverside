@@ -3,6 +3,7 @@ var nano = require('nano')('http://146.169.46.220:6984');
 var couchdb = nano.db.use('tripster');
 var bodyParser = require('body-parser');
 var fs = require('fs');
+var videoshow = require('videoshow');
 var gm = require('gm');
 var request = require('request');
 var url = require('url');
@@ -68,7 +69,7 @@ app.get('/places', function (req, res) {
 			
 			var places = rawPlaces.forEach(function getPlace(rawPlace) {
 				if (rawPlace.value.placeId) {
-					visitedPlacesIds[rawPlace.value.placeId] = 1;
+					visitedPlacesIds[rawPlace.value.placeId] = rawPlace.value.path;
 				} else {
 					computedPlaces[rawPlace.value._id] = {
 						lat: rawPlace.value.lat,
@@ -87,21 +88,25 @@ app.get('/places', function (req, res) {
 			var startPlaceCoords = latLngUrlString(sortedPlaces[0]);
 			var endPlaceCoords = latLngUrlString(sortedPlaces[sortedPlaces.length - 1]);
 			
-			var visitedPlacesCoords = Object.keys(visitedPlacesIds)
+			var visitedPlaces = Object.keys(visitedPlacesIds)
 			.map(function getVisitedPlace(placeId) {
 				return computedPlaces[placeId];
-			})
+			});
+
+			var visitedPlacesCoords = visitedPlaces
 			.reduce(function getVisitedPlacesPath(acc, place) {
 				return acc + latLngUrlString(place);
 			}, '');
+
 				
 			var url = 'https://maps.googleapis.com/maps/api/staticmap?format=jpg&key=' 
 				+ GOOGLE_API_KEY
 				+ '&size=640x640' 
 				+ polylineCoords
 				+ '&markers=icon:' + startFlagUrl + startPlaceCoords
-				+ '&markers=icon:' + finishFlagUrl   + endPlaceCoords
-				+ '&markers=icon:' + visitedPlaceFlagUrl + visitedPlacesCoords;
+				+ '&markers=icon:' + finishFlagUrl   + endPlaceCoords;
+				+ (visitedPlacesCoords === '' ? '' :
+					 '&markers=icon:' + visitedPlaceFlagUrl + visitedPlacesCoords);
 			
 			console.log(url);
 			var preview_img_name = createPreviewImage(url);
@@ -119,8 +124,7 @@ app.get('/places', function (req, res) {
 						} else {
 							console.log('Old preview deleted successfully.');
 						}
-					});
-
+	
 					doc.preview = serverUrl + '/' + preview_img_name;
 					doc.status = "stopped";
 					couchdb.update(doc, id, function(err, result) {
@@ -130,10 +134,71 @@ app.get('/places', function (req, res) {
 							res.status(500).send('Error while updating doc: ' + err);
 						}
 					});
+				});
 				} else {
 					res.status(500).send('Error in DB query: ' + err);
 				}
 			});
+			
+			couchdb.view('trips', 'byId', {'key' : req.query.tripId}, function(err, body) {
+                                if (!err) {
+                                        var id  = body.rows[0].id;
+                                        var doc = body.rows[0].value;
+					
+					var video_options = {
+						fps: 25,
+						loop: 3, // seconds
+						transition: true,
+						transitionDuration: 1, // seconds
+						videoBitrate: 1024,
+						videoCodec: 'libx264',
+						size: '640x?',
+						format: 'mp4'
+					};
+					
+					var video_photos = Object.keys(visitedPlacesIds)
+						.map(function getVisitedPlace(placeId) {
+						return {
+							photoUrl: visitedPlacesIds[placeId],
+							time: computedPlaces[placeId].time
+							}
+					})
+					.sort(function sortPhotoPlacesByTime(photoPlaceA, photoPlaceB) {
+						return photoPlaceA.time - photoPlaceB.time;
+					})
+					.map(function getPhotoPath(photoPlace) {
+						var photoName = photoPlace.photoUrl.substring(serverUrl.length + 1);
+						return path.join(__dirname, '../uploads', photoName);
+					});
+
+					var video_name = uuid.v4() + '.mp4';
+					var video_path = path.join(__dirname, '../uploads', video_name);
+					
+					videoshow(video_photos, video_options)
+					.save(video_path)
+					.on('start', function() {
+						console.log('Started writing video ' + video_name);
+					})
+					.on('error', function(err) {
+						console.error('Error while writing video ' + video_name, err);
+					})
+					.on('end', function() {
+						console.log('Finished writing video ' + video_name 
+											+ ', now adding to db.');
+					});
+	
+					doc.video = serverUrl + '/' + video_name;
+					couchdb.update(doc, id, function(err, result) {
+						if (!err) {
+							console.log('Video uploaded successfully!');
+						} else {
+							console.log('Error while uploading video: ' + err);
+						}
+					});
+                                } else {
+                                        res.status(500).send('Error in DB query: ' + err);
+                                }
+                        });
                 } else {
                         res.status(500).send('DB is not fine: '+ err);
                 }
