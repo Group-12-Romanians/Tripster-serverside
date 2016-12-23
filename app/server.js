@@ -13,7 +13,7 @@ var path = require('path');
 var geolib = require('geolib');
 
 // custom couchdb update function
-couchdb.update = function(obj, key, callback){
+couchdb.update = function(obj, key, callback) {
  var db = this;
  db.get(key, function (error, existing){ 
     if(!error) obj._rev = existing._rev;
@@ -149,7 +149,7 @@ app.get('/places', function (req, res) {
 				+ polylineCoords
 				+ '&markers=icon:' + startFlagUrl + startPlaceCoords
 				+ '&markers=icon:' + finishFlagUrl   + endPlaceCoords;
-				+ '&markers=icon:' + visitedPlaceFlagUrl + visitedPlacesCoords);
+				+ '&markers=icon:' + visitedPlaceFlagUrl + visitedPlacesCoords;
 			
 			console.log(url);
 			var preview_img_name = createPreviewImage(url);
