@@ -1,256 +1,214 @@
+// server info
+var server = 'http://146.169.46.142';
+var port = process.env.PORT || 8081;
+var serverUrl = server + ':' + port;
+
+// trip preview details
+var START_FLAG_URL = 'https://goo.gl/IOJ0Sx';
+var FINISH_FLAG_URL = 'https://goo.gl/Mnyj3b';
+var VISITED_PLACES_FLAG_URL = 'https://goo.gl/uqUiCs';
+var NEIGHBOUR_PLACES_DISTANCE_LIMIT = 1000; // metres
+
+// modules
 var express = require('express');
-var nano = require('nano')('http://146.169.46.220:6984');
+var nano = require('nano')(server + ':5984');
 var couchdb = nano.db.use('tripster');
 var bodyParser = require('body-parser');
 var fs = require('fs');
 var videoshow = require('videoshow');
 var gm = require('gm');
 var request = require('request');
-var url = require('url');
 var uuid = require('node-uuid');
-var spawn = require('threads').spawn;
 var path = require('path');
 var geolib = require('geolib');
-
-// custom couchdb update function
-couchdb.update = function(obj, key, callback) {
- var db = this;
- db.get(key, function (error, existing){ 
-    if(!error) obj._rev = existing._rev;
-    db.insert(obj, key, callback);
- });
-}
-
 var multer = require('multer');
-
-var GOOGLE_API_KEY = 'AIzaSyBEcADKicF0ZeIooOSbh12Vu7BVyDOIjik';
 var GooglePlaces = require('node-googleplaces');
+var GOOGLE_API_KEY = 'AIzaSyBEcADKicF0ZeIooOSbh12Vu7BVyDOIjik';
 var googlePlaces = new GooglePlaces(GOOGLE_API_KEY);
 
-var storage = multer.diskStorage({ 
+var app = express();
+app.use(express.static(path.join(__dirname, '../uploads')));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// custom couchdb update function (needed to handle revisions)
+couchdb.update = function(obj, key, callback) {
+ var db = this;
+ db.get(key, function (error, existing) {
+   if(error) return;
+   for (var prop in existing) {
+     if (!obj.hasOwnProperty(prop)) {
+       obj[prop] = existing[prop];
+     }
+   }
+   db.insert(obj, key, callback);
+ });
+};
+
+var beforeStoreImage = multer.diskStorage({
 	destination: path.join(__dirname, '../uploads'),
 	filename: function (req, file, cb) {
-		var new_name = req.query.photo_id;
-		searchAndUpdatePlaceName(new_name);	
-		cb(null, new_name + '.jpg');
+		// the place of this photoId is important so find a name for it
+		searchAndUpdatePlaceName(req.query.photo_id);
+		cb(null, req.query.photo_id + '.jpg');
 	}
 });
+var upload = multer({storage: beforeStoreImage}).single('photo');
 
-function searchAndUpdatePlaceName(photoName)	{
-	couchdb.view(	'places', 
-		     	'byPhotoId', 
-			{
-				key : photoName,
-				include_docs : true
-			} ,
-			function(err, body) {
-				if (err) {
-					console.log('Error in places/byPhotoId view: ', err);
-				} else {
-					addNameToPlaceDoc(body.rows[0].doc);
-				}		
-																	
-	  		});
-}
-
-function addNameToPlaceDoc(doc){
-	var params = {
-		location: doc.lat.toString() + 
-			  	',' + 
-			  doc.lng.toString(),
-		radius: 250,
-		type: 'point_of_interest'
-	};
-	googlePlaces.nearbySearch(params, function updatePlace(err, res) {
-		var placeName = res.body.results[0].name;
-		var photoPlaceDocId = doc._id;
-		doc.name = placeName;
-	
-		couchdb.update(doc, photoPlaceDocId, function(err, result) {
-			if (!err) {
-				console.log(JSON.stringify(doc));
-			} else {
-				console.log('Error while updating doc: ' + err);
-			}
-		});
-
+function searchAndUpdatePlace(photoId) {
+	couchdb.get(photoId, function(err, doc) {
+		if (err) return;
+    addPlaceDetails(doc.placeId);
 	});
 }
 
-var upload = multer( {storage: storage }).single('photo');
+function addPlaceDetails(docId) {
+  couchdb.get(docId, function(err, doc) {
+    if (doc.name) return; // if already has name we don't add one
+    var params = {
+  		location: doc.lat.toString() + ',' + doc.lng.toString(),
+  		radius: 250,
+  		type: 'point_of_interest'
+  	};
+  	googlePlaces.nearbySearch(params, function updatePlace(err, res) {
+  		doc.name = res.body.results[0].name;
+  		couchdb.update(doc, doc._id, function(err, result) {
+  			if (!err) {
+  				console.log(JSON.stringify(doc));
+  			} else {
+  				console.log('Error while updating doc: ' + err);
+  			}
+  		});
+  	});
+  });
+}
 
-var app = express();
-var NEIGHBOUR_PLACES_DISTANCE_LIMIT = 1000; // metres
-
-var startFlagUrl = 'https://goo.gl/IOJ0Sx';
-var finishFlagUrl = 'https://goo.gl/Mnyj3b';
-var visitedPlaceFlagUrl = 'https://goo.gl/uqUiCs';
-app.use(express.static(path.join(__dirname, '../uploads')));
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true })); 
-
-var port = process.env.PORT || 8081
-var serverUrl = 'http://146.169.46.220:' + port;
-
-app.get('/', function (req, res) {
-	couchdb.view('users', 'byName', function(err, body) {
-  		if (!err) {
-			
-			res.send('DB is fine: ' + JSON.stringify(body));
-  		} else {
-			res.status(500).send('DB is not fine: '+ err);	
+app.post('/photos/upload', function(req, res, next) {
+	upload(req, res, function(err, new_path) {
+		if (err) {
+			res.status(500).send("Error occured while uploading photo!");
+		} else {
+			res.send("Photo uploaded successfully!" + new_path);
 		}
 	});
 });
 
-app.get('/places', function (req, res) {
-	couchdb.view('places', 'byTrip', {'key' : req.query.tripId}, function(err, body) {
-		if (!err) {
-			var rawPlaces = body.rows;
-			
-			var visitedPlacesIds = {};
-			var computedPlaces = {};
-			
-			var places = rawPlaces.forEach(function getPlace(rawPlace) {
-				if (rawPlace.value.placeId) {
-					visitedPlacesIds[rawPlace.value.placeId] = rawPlace.value.path;
-				} else {
-					computedPlaces[rawPlace.value._id] = {
-						lat: rawPlace.value.lat,
-						lng: rawPlace.value.lng,
-						time: rawPlace.value.time	
-					};
-				}
-			});
-			
-			var sortedPlaces = Object.keys(computedPlaces)
-			.map(function getValue(key) { return computedPlaces[key]; })
-			.sort(sortPlacesByTime);
-			
-			var polylineCoords = computePolylineCoords(sortedPlaces);
-
-			var startPlaceCoords = latLngUrlString(sortedPlaces[0]);
-			var endPlaceCoords = latLngUrlString(sortedPlaces[sortedPlaces.length - 1]);
-			
-			var visitedPlaces = Object.keys(visitedPlacesIds)
-			.map(function getVisitedPlace(placeId) {
-				return computedPlaces[placeId];
-			});
-
-			var visitedPlacesCoords = visitedPlaces
-			.reduce(function getVisitedPlacesPath(acc, place) {
-				return acc + latLngUrlString(place);
-			}, '');
-
-				
-			var url = 'https://maps.googleapis.com/maps/api/staticmap?format=jpg&key=' 
-				+ GOOGLE_API_KEY
-				+ '&size=640x640' 
-				+ polylineCoords
-				+ '&markers=icon:' + startFlagUrl + startPlaceCoords
-				+ '&markers=icon:' + finishFlagUrl   + endPlaceCoords;
-				+ '&markers=icon:' + visitedPlaceFlagUrl + visitedPlacesCoords;
-			
-			console.log(url);
-			var preview_img_name = createPreviewImage(url);
-			
-			res.send(preview_img_name);
-				
-			couchdb.view('trips', 'byId', {'key' : req.query.tripId}, function(err, body) {
-				if (!err) {
-					var id  = body.rows[0].id;
-					var doc = body.rows[0].value;
-					
-					var currPreviewName = doc.preview.substring(serverUrl.length + 1);
-					var currPreviewPath = path.join(__dirname, '../uploads', currPreviewName);
-					
-					fs.unlink(currPreviewPath, function afterRemoval(err) {
-						if (err) {
-							console.log('Error ocurred while deleting old preview: ' + err);
-						} else {
-							console.log('Old preview deleted successfully.');
-						}
-					});
-					
-					var video_options = {
-						fps: 25,
-						loop: 3, // seconds
-						transition: true,
-						transitionDuration: 1, // seconds
-						videoBitrate: 1024,
-						videoCodec: 'libx264',
-						size: '640x?',
-						format: 'mp4'
-					};
-					
-					var video_photos = Object.keys(visitedPlacesIds)
-						.map(function getVisitedPlace(placeId) {
-						return {
-							photoUrl: visitedPlacesIds[placeId],
-							time: computedPlaces[placeId].time
-							}
-					})
-					.sort(function sortPhotoPlacesByTime(photoPlaceA, photoPlaceB) {
-						return photoPlaceA.time - photoPlaceB.time;
-					})
-					.map(function getPhotoPath(photoPlace) {
-						var photoName = photoPlace.photoUrl.substring(serverUrl.length + 1);
-						return path.join(__dirname, '../uploads', photoName);
-					});
-
-					var video_name = uuid.v4() + '.mp4';
-					var video_path = path.join(__dirname, '../uploads', video_name);
-					
-					videoshow(video_photos, video_options)
-					.save(video_path)
-					.on('start', function() {
-						console.log('Started writing video ' + video_name);
-					})
-					.on('error', function(err) {
-						console.error('Error while writing video ' + video_name, err);
-					})
-					.on('end', function() {
-						console.log('Finished writing video ' + video_name 
-											+ ', now adding to db.');
-					});
-	
-					doc.video = serverUrl + '/' + video_name;
-					doc.preview = serverUrl + '/' + preview_img_name;
-					doc.status = "stopped";
-					couchdb.update(doc, id, function(err, result) {
-						if (!err) {
-							console.log(JSON.stringify(doc));
-						} else {
-							console.log('Error while updating doc: ' + err);
-						}
-			
-					});
-                                } else {
-                                        res.status(500).send('Error in DB query: ' + err);
-                                }
-                        });
-                } else {
-                        res.status(500).send('DB is not fine: '+ err);
-                }
-        });
+app.get('/updateTrip', function(req, res, next) {
+	addTripDetails(req.query.tripId);
+  res.send("Will complete maybe, go check :)");
 });
 
-function computePolylineCoords(places) {
+var feed = couchdb.follow({since: "now"});
+feed.filter = function(doc, req) {
+  return doc.stoppedAt && !(doc.video || doc.preview);
+};
+feed.on('change', function (change) {
+  console.log("change: ", change);
+  addTripDetails(change.id);
+});
+feed.follow();
+
+function addTripDetails(tripId) {
+  addTripPreview(tripId);
+  addTripVideo(tripId);
+}
+
+function addTripPreview(tripId) {
+  couchdb.view('places', 'byTrip', {'key' : tripId}, function(err, body) {
+		if (err) {
+      console.error('Error when getting places for trip: ' + tripId);
+      return;
+    }
+    var rawPlaces = body.rows;
+		var visitedPlaces = [];
+		var computedPlaces = [];
+		rawPlaces.forEach(function(rawPlace) {
+			if (rawPlace.value.name) {
+        visitedPlaces.push({
+  				lat: rawPlace.value.lat,
+  				lng: rawPlace.value.lng,
+  			});
+			}
+			computedPlaces.push({
+				lat: rawPlace.value.lat,
+				lng: rawPlace.value.lng,
+				time: rawPlace.value.time
+			});
+		});
+		var sortedPlaces = computedPlaces.sort(function(placeA, placeB) {
+    	return placeA.time - placeB.time;
+    });
+
+		var newDoc = {preview: createPreviewImage(getPreviewUrl(sortedPlaces, visitedPlaces))};
+    couchdb.update(newDoc, tripId, function(err, result) {
+      if (err) console.error('Error while inserting preview: ' + err);
+      else console.log("Preview added successfully.");
+    });
+  });
+}
+
+function addTripVideo(tripId) {
+  couchdb.view('images', 'byTrip', {'key' : tripId}, function(err, body) {
+    if (err) {
+      console.error('Error when getting images for trip: ' + tripId);
+      return;
+    }
+    var rawPlaces = body.rows;
+		var images = [];
+		rawPlaces.forEach(function(rawPlace) {
+			images.push(rawPlace.value.path);
+		});
+
+    var video_options = {
+      fps: 25,
+      loop: 2, // seconds
+      transition: true,
+      transitionDuration: 1, // seconds
+      videoBitrate: 1024,
+      videoCodec: 'libx264',
+      size: '640x?',
+      format: 'mp4'
+    };
+    var video_photos = images.map(function(photoUrl) {
+      var photoName = photoUrl.substring(serverUrl.length + 1);
+      return path.join(__dirname, '../uploads', photoName);
+    });
+    var video_name = uuid.v4() + '.mp4';
+    var video_path = path.join(__dirname, '../uploads', video_name);
+
+    videoshow(video_photos, video_options)
+    .save(video_path)
+    .on('start', function() {
+      console.log('Started writing video ' + video_name);
+    })
+    .on('error', function(err) {
+      console.error('Error while writing video ' + video_name, err);
+    })
+    .on('end', function() {
+      console.log('Finished writing video ' + video_name + ' and now adding to db.');
+      var newDoc = {video: serverUrl + '/' + video_name};
+      couchdb.update(newDoc, tripId, function(err, result) {
+        if (err) console.error('Error while inserting preview: ' + err);
+        else console.log("Preview added successfully.");
+      });
+    });
+  });
+}
+
+function getPolylineUrl(places) {
 	var polylineCoords = '';
 	var currPath = initPath(places[0]);
 	var currPathSize = 1;
 	var prevPlace = places[0];
 	for (var i = 1; i < places.length; i++) {
 		if (!areNeighbourPlaces(places[i], prevPlace)) {
-			polylineCoords = polylineCoords 
-						+ (currPathSize > 1 ? currPath : '')
-						+ pathJump(prevPlace, places[i]);
+			polylineCoords = polylineCoords + (currPathSize > 1 ? currPath : '') + pathJump(prevPlace, places[i]);
 			currPath = initPath(places[i]);
 			currPathSize = 1;
 		} else {
 			currPath = currPath + latLngUrlString(places[i]);
 			currPathSize++;
-		} 
+		}
 		prevPlace = places[i];
 	}
 	polylineCoords = polylineCoords + (currPathSize > 1 ? currPath : '');
@@ -264,10 +222,32 @@ function areNeighbourPlaces(placeA, placeB) {
 function initPath(place) {
 	return '&path=color:0x0000ff|weight:5' + latLngUrlString(place);
 }
- 
+
+function latLngUrlString(place) {
+  return '|' + place.lat + ',' + place.lng;
+}
+
 function pathJump(from, to) {
-	return '&path=color:0x003000|weight:1'+ latLngUrlString(from)
-                                      	+ latLngUrlString(to);
+	return '&path=color:0x003000|weight:1'+ latLngUrlString(from) + latLngUrlString(to);
+}
+
+function getPreviewUrl(sortedPlaces, visitedPlaces) {
+  var polylineUrl = getPolylineUrl(sortedPlaces);
+  var startPlaceCoords = latLngUrlString(sortedPlaces[0]);
+  var endPlaceCoords = latLngUrlString(sortedPlaces[sortedPlaces.length - 1]);
+  var visitedPlacesCoords = visitedPlaces.reduce(function(acc, place) {
+    return acc + latLngUrlString(place);
+  }, '');
+
+  var url = 'https://maps.googleapis.com/maps/api/staticmap?format=jpg&key=' +
+  GOOGLE_API_KEY +
+  '&size=640x640' +
+  polylineUrl +
+  '&markers=icon:' + START_FLAG_URL + startPlaceCoords +
+  '&markers=icon:' + FINISH_FLAG_URL + endPlaceCoords +
+  '&markers=icon:' + VISITED_PLACES_FLAG_URL + visitedPlacesCoords;
+  console.log(url);
+  return url;
 }
 
 function createPreviewImage(url) {
@@ -277,149 +257,5 @@ function createPreviewImage(url) {
 	return preview_img_name;
 }
 
-
-
-function sortPlacesByTime(placeA, placeB) {
-	return placeA.time - placeB.time;
-};
-
-function latLngUrlString(place) {
-	return '|' + place.lat + ',' + place.lng;
-}
-
-function getVisitedPlaces(tripId) {
-	couchdb.view('test', 'test', {'include_docs' : true}, function(err, body) {
-		console.log(JSON.stringify(body)); 
-	});
-}
-
-app.post('/new_trip', function(req, res) {
-	var user_id = req.query.user_id;
-	var locations = req.body.locations;
-	var lines = locations.split('\n');
-	var trip_info = lines[0].split(',');
-	var evnts = [], images = [], coords = [];
-	for(var i = 1; i < lines.length; ++i) {
-		var data = lines[i].split(',');
-		if (data.length > 2) {
-			var evnt = {
-				time: data[0],
-				lat: data[1],
-				lng: data[2]
-			};
-			coords.push(evnt.lat + ',' + evnt.lng);
-			if (data.length > 3) {
-				evnt.img_ids = data.slice(3, data.length);
-				var evnt_images = evnt.img_ids.map(function get_image(image_id) {
-					return path.join(__dirname, '../uploads', image_id + '.jpg');
-				});
-				images = images.concat(evnt_images);
-			}
-			evnts.push(evnt);
-		}
-	}
-	
-	var preview_img_name = uuid.v4();
-	var preview_image_path = path.join(__dirname, '../uploads', preview_img_name + '.jpg');
-	var video_name = uuid.v4() + '.mp4';
-	var video_path = path.join(__dirname, '../uploads', video_name);
-	var trip = new db.Trip({
-		trip_id: trip_info[0],
-		name: trip_info[1],
-		preview_img: preview_img_name,
-		preview_video: video_name,
-		owner: user_id,
-		events: evnts
-	});
-
-	res.send(trip);
-
-	var video_options = {
-		fps: 25,
-		loop: 3, // seconds
-		transition: true,
-		transitionDuration: 1, // seconds
-		videoBitrate: 1024,
-	 	videoCodec: 'libx264',
-		size: '640x?',
-		format: 'mp4'
-	};
-
-	var fs = require('fs'); 
-	var request = require('request');
-	var videoshow = require('videoshow');
-	var coords_path = coords.map(function path_point(latlong) {
-						return '|' + latlong;
-					})
-				      .reduce(function compute_path(acc, point) {
-						return acc + point;
-					});   	
-	var url = 'https://maps.googleapis.com/maps/api/staticmap?format=jpg&key=' 
-			+ GOOGLE_API_KEY 
-			+ '&size=640x440&path=color:0x0000ff|weight:5' 
-			+ coords_path;
-
-  request(url).pipe(fs.createWriteStream(preview_image_path));
-	console.log(preview_image_path);
-	var video_images = images;
-	console.log(video_images);
-	videoshow(video_images, video_options)
-	.save(video_path)
-	.on('start', function() {
-		console.log('Started writing video ' + video_name);
-	})
-	.on('error', function(err) {
-		console.error('Error while writing video ' + video_name, err);
-	})
-	.on('end', function() {
-		console.log('Finished writing video ' + video_name 
-				+ ', now adding to db.');
-		trip.save().then(function(doc) {
-			console.log('Successfully saved ' + doc);
-		}).catch(function(err) {
-			console.log(err);
-		});
-	});
-});
-
-app.post('/photos/upload', function(req, res, next) {
-	upload(req, res, function(err, new_path) {
-		if (err) {
-			res.status(500).send("Error occured while uploading photo!");
-		} else {
-			res.send("Photo uploaded successfully!" + new_path);
-		}
-	});
-});
-
-function resize_img(new_path) {
-	var canvasWidth = 640;
-	var canvasHeight = 440;
-	gm(path.join(__dir_name, "../uploads", new_path)).size(function(error, size) {
-		if (error) {
-			console.error(error);
-		} else {
-			// current image size
-			var imageWidth = size.width;
-			var imageHeight = size.height;
-			// center placement
-			var x = (canvasWidth / 2) - (imageWidth / 2);
- 			var y = (canvasHeight / 2) - (imageHeight / 2);
- 			this.background('#000000')
-			.resize(imageWidth, imageHeight)
-			.gravity('Center')
-			.extent(canvasWidth, canvasHeight)
- 			.write(path.join(__dirname, "../uploads", new_path), function(error) {
- 				if (error) {
-   				console.error(error);
-				} else {
-					console.log(this.outname);
-				}
-			});
-  	}
-	});
-
-}
-	
 app.listen(port);
 console.log('Server running now on port: ' + port);
