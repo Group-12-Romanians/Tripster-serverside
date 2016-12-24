@@ -253,8 +253,8 @@ function getPreviewUrl(sortedPlaces, visitedPlaces) {
 function createPreviewImage(url) {
 	var preview_img_name = uuid.v4() + '.jpg';
 	var preview_image_path = path.join(__dirname, '../uploads', preview_img_name);
-        request(url).pipe(fs.createWriteStream(preview_image_path));
-	return preview_img_name;
+  request(url).pipe(fs.createWriteStream(preview_image_path));
+	return serverUrl + '/' + preview_img_name;
 }
 
 app.listen(port);
