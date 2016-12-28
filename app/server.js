@@ -48,8 +48,6 @@ couchdb.update = function(obj, key, callback) {
 var beforeStoreImage = multer.diskStorage({
 	destination: path.join(__dirname, '../uploads'),
 	filename: function (req, file, cb) {
-		// the place of this photoId is important so find a name for it
-		searchAndUpdatePlaceName(req.query.photo_id);
 		cb(null, req.query.photo_id + '.jpg');
 	}
 });
@@ -57,24 +55,32 @@ var upload = multer({storage: beforeStoreImage}).single('photo');
 
 function searchAndUpdatePlace(photoId) {
 	couchdb.get(photoId, function(err, doc) {
-		if (err) return;
+		if (err) {
+      console.error('Failed in getting the photoId');
+      return;
+    }
+    console.log('Adding place name to:' + doc.placeId);
     addPlaceDetails(doc.placeId);
 	});
 }
 
 function addPlaceDetails(docId) {
   couchdb.get(docId, function(err, doc) {
-    if (doc.name) return; // if already has name we don't add one
+    if (doc.name) {
+			console.error('Already has name');
+			return; // if already has name we don't add one
+		}
     var params = {
   		location: doc.lat.toString() + ',' + doc.lng.toString(),
   		radius: 250,
   		type: 'point_of_interest'
   	};
   	googlePlaces.nearbySearch(params, function updatePlace(err, res) {
-  		doc.name = res.body.results[0].name;
-  		couchdb.update(doc, doc._id, function(err, result) {
+  		var newDoc = {};
+      newDoc.name = res.body.results[0].name;
+  		couchdb.update(newDoc, docId, function(err, result) {
   			if (!err) {
-  				console.log(JSON.stringify(doc));
+  				console.log('Name given is:' + newDoc.name);
   			} else {
   				console.log('Error while updating doc: ' + err);
   			}
@@ -84,12 +90,9 @@ function addPlaceDetails(docId) {
 }
 
 app.post('/photos/upload', function(req, res, next) {
-	upload(req, res, function(err, new_path) {
-		if (err) {
-			res.status(500).send("Error occured while uploading photo!");
-		} else {
-			res.send("Photo uploaded successfully!" + new_path);
-		}
+  upload(req, res, function(err, new_path) {
+		if (err) res.status(500).send("Error occured while uploading photo!");
+		else res.send("Photo uploaded successfully!" + new_path);
 	});
 });
 
@@ -100,11 +103,13 @@ app.get('/updateTrip', function(req, res, next) {
 
 var feed = couchdb.follow({since: "now"});
 feed.filter = function(doc, req) {
-  return doc.stoppedAt && !(doc.video || doc.preview);
+  return doc.path || (doc.stoppedAt && !doc.preview);
 };
 feed.on('change', function (change) {
   console.log("change: ", change);
-  addTripDetails(change.id);
+  if (change.doc.path) searchAndUpdatePlace(change.id);
+	else if (change.doc.stoppedAt && !change.doc.preview && !change.doc.video) addTripDetails(change.id);
+	else console.log('None of the feeds above');
 });
 feed.follow();
 
