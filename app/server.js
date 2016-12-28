@@ -34,14 +34,18 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // custom couchdb update function (needed to handle revisions)
 couchdb.update = function(obj, key, callback) {
  var db = this;
- db.get(key, function (error, existing) {
+ db.get(key, function(error, existing) {
    if(error) return;
-   for (var prop in existing) {
-     if (!obj.hasOwnProperty(prop)) {
-       obj[prop] = existing[prop];
+   var changed = false;
+   for (var prop in obj) {
+     if (!(existing.hasOwnProperty(prop) && existing[prop] === obj[prop])) {
+       changed = true;
+       existing[prop] = obj[prop];
      }
    }
-   db.insert(obj, key, callback);
+   if (changed) {
+     db.insert(existing, key, callback);
+   }
  });
 };
 
@@ -103,19 +107,47 @@ app.get('/updateTrip', function(req, res, next) {
 
 var feed = couchdb.follow({since: "now"});
 feed.filter = function(doc, req) {
-  return doc.path || (doc.stoppedAt && !doc.preview);
+  return doc.path || // a photo
+         doc.stoppedAt || // a stopped trip
+         (doc.folLevel && doc.folLevel === 0); // a new follower
 };
-feed.on('change', function (change) {
+feed.on('change', function(change) {
   console.log("change: ", change);
-  if (change.doc.path) searchAndUpdatePlace(change.id);
-	else if (change.doc.stoppedAt && !change.doc.preview && !change.doc.video) addTripDetails(change.id);
+  var doc = change.doc;
+  if (doc.path) searchAndUpdatePlace(change.id);
+	else if (doc.stoppedAt) addTripDetails(change.id);
+  else if (doc.folLevel) createNotification(change.id);
 	else console.log('None of the feeds above');
 });
 feed.follow();
 
+function createNotification(followId) {
+  var res = followId.split(":");
+  var doc = {
+    time: new Date().getTime(),
+    receiver: res[1],
+    other: res[0],
+    type: "follower"
+  };
+  db.insert(doc, uuid.v4(), function(err, result) {
+    if (err) console.error('Error while inserting notification for follower: ' + err);
+    else console.log("Notification added successfully.");
+  });
+}
+
 function addTripDetails(tripId) {
-  addTripPreview(tripId);
-  addTripVideo(tripId);
+  db.get(tripId, function(error, doc) {
+    if (error) {
+      console.error("Cannot get doc");
+      return;
+    }
+    if (!doc.preview) {
+      addTripPreview(tripId);
+    }
+    if (!doc.video) {
+      addTripVideo(tripId);
+    }
+  });
 }
 
 function addTripPreview(tripId) {
