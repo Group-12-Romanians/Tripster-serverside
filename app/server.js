@@ -101,7 +101,7 @@ app.post('/photos/upload', function(req, res, next) {
 });
 
 app.get('/updateTrip', function(req, res, next) {
-	addTripDetails(req.query.tripId);
+	addTripVideo(req.query.tripId);
   res.send("Will complete maybe, go check :)");
 });
 
@@ -196,19 +196,16 @@ function addTripVideo(tripId) {
 		});
 
     var video_options = {
-      fps: 25,
-      loop: 2, // seconds
+      loop: 3, // seconds
       transition: true,
       transitionDuration: 1, // seconds
-      videoBitrate: 1024,
-      videoCodec: 'libx264',
-      size: '640x?',
-      format: 'mp4'
     };
+
     var video_photos = images.map(function(photoUrl) {
       var photoName = photoUrl.substring(serverUrl.length + 1);
       return path.join(__dirname, '../uploads', photoName);
     });
+    console.log(video_photos);
     var video_name = uuid.v4() + '.mp4';
     var video_path = path.join(__dirname, '../uploads', video_name);
 
@@ -291,6 +288,34 @@ function createPreviewImage(url) {
 	var preview_image_path = path.join(__dirname, '../uploads', preview_img_name);
   request(url).pipe(fs.createWriteStream(preview_image_path));
 	return serverUrl + '/' + preview_img_name;
+}
+
+function resize_img(new_path) {
+	var canvasWidth = 500;
+	var canvasHeight = 500;
+	gm(path.join(__dir_name, "../uploads", new_path)).size(function(error, size) {
+		if (error) {
+			console.error(error);
+		} else {
+			// current image size
+			var imageWidth = size.width;
+			var imageHeight = size.height;
+			// center placement
+			var x = (canvasWidth / 2) - (imageWidth / 2);
+ 			var y = (canvasHeight / 2) - (imageHeight / 2);
+ 			this.background('#000000')
+			.resize(imageWidth, imageHeight)
+			.gravity('Center')
+			.extent(canvasWidth, canvasHeight)
+ 			.write(path.join(__dirname, "../uploads", new_path), function(error) {
+ 				if (error) {
+   				console.error(error);
+				} else {
+					console.log(new_path);
+				}
+			});
+  	}
+	});
 }
 
 app.listen(port);
