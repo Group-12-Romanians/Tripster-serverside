@@ -72,7 +72,7 @@ function addPlaceDetails(docId) {
   couchdb.get(docId, function(err, doc) {
     if (doc.name) {
 			console.error('Already has name');
-			return; // if already has name we don't add one
+			return; // if place already has name we don't add one
 		}
     var params = {
   		location: doc.lat.toString() + ',' + doc.lng.toString(),
@@ -80,8 +80,7 @@ function addPlaceDetails(docId) {
   		type: 'point_of_interest'
   	};
   	googlePlaces.nearbySearch(params, function updatePlace(err, res) {
-  		var newDoc = {};
-      newDoc.name = res.body.results[0].name;
+  		var newDoc = {name: res.body.results[0].name};
   		couchdb.update(newDoc, docId, function(err, result) {
   			if (!err) {
   				console.log('Name given is:' + newDoc.name);
@@ -107,16 +106,22 @@ app.get('/updateTrip', function(req, res, next) {
 
 var feed = couchdb.follow({since: "now"});
 feed.filter = function(doc, req) {
-  return doc.path || // a photo
-         doc.stoppedAt || // a stopped trip
-         doc.folLevel != null; // a new follower
+  return doc.placeId !== null || // a photo
+         doc.stoppedAt !== null || // a stopped trip
+         (doc.folLevel !== null && doc.folLevel === -1); // a new follower with unset level
 };
 feed.on('change', function(change) {
   console.log("change: ", change);
   var doc = change.doc;
-  if (doc.path) searchAndUpdatePlace(change.id);
-	else if (doc.stoppedAt && !(doc.preview || doc.video || doc.name)) addTripDetails(change.id);
-  else if (doc.folLevel != null && doc.folLevel === -1) createNotification(change.id);
+  if (doc.placeId) searchAndUpdatePlace(change.id); // a photo
+  else if (doc.stoppedAt) { // a stopped trip
+    if (!doc.name) addTripName(change.id); // a stopped trip with no name
+    else if (!doc.preview) addTripPreview(change.id); // a stopped trip with no preview but with name
+    else if (!doc.video) addTripVideo(change.id); // a stopped trip with no video but with preview and name
+    else console.log('This trip has all the neccessary parts'); // these checks are neccessary to serialize
+    // the edits so that we don't create multiple previews and videos
+  }
+  else if (doc.folLevel !== null && doc.folLevel === -1) createNotification(change.id); // a new follower
 	else console.log('None of the feeds above');
 });
 feed.follow();
@@ -133,12 +138,6 @@ function createNotification(followId) {
     if (err) console.error('Error while inserting notification for follower: ' + err);
     else console.log("Notification added successfully.");
   });
-}
-
-function addTripDetails(tripId) {
-  addTripName(tripId);
-	addTripPreview(tripId);
-	addTripVideo(tripId);
 }
 
 function addTripName(tripId) {
@@ -192,7 +191,7 @@ function addTripVideo(tripId) {
     var rawPlaces = body.rows;
 		var images = [];
 		rawPlaces.forEach(function(rawPlace) {
-			images.push(rawPlace.value.path);
+			images.push(rawPlace.value._id);
 		});
 
     var video_options = {
@@ -201,8 +200,7 @@ function addTripVideo(tripId) {
       transitionDuration: 1, // seconds
     };
 
-    var video_photos = images.map(function(photoUrl) {
-      var photoName = photoUrl.substring(serverUrl.length + 1);
+    var video_photos = images.map(function(photoName) {
       return path.join(__dirname, '../uploads', photoName);
     });
     console.log(video_photos);
