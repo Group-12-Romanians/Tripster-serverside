@@ -12,7 +12,7 @@ var NEIGHBOUR_PLACES_DISTANCE_LIMIT = 1000; // metres
 // modules
 var express = require('express');
 var nano = require('nano')(server + ':5984');
-var couchdb = nano.db.use('tripster');
+var couchdb = nano.db.use('tripster01');
 var bodyParser = require('body-parser');
 var fs = require('fs');
 var videoshow = require('videoshow');
