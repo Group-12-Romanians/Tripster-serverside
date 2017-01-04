@@ -144,7 +144,7 @@ function addTripName(tripId) {
 	var newDoc = {name: "Some smart name"};
   couchdb.update(newDoc, tripId, function(err, result) {
     if (err) console.error('Error while inserting preview: ' + err);
-    else console.log("Preview added successfully.");
+    else console.log("Trip name added successfully.");
   });
 }
 
@@ -191,7 +191,7 @@ function addTripVideo(tripId) {
     var rawPlaces = body.rows;
 		var images = [];
 		rawPlaces.forEach(function(rawPlace) {
-			images.push(rawPlace.value._id);
+			images.push(rawPlace.value._id + '.jpg');
 		});
 
     var video_options = {
@@ -220,7 +220,7 @@ function addTripVideo(tripId) {
       var newDoc = {video: serverUrl + '/' + video_name};
       couchdb.update(newDoc, tripId, function(err, result) {
         if (err) console.error('Error while inserting preview: ' + err);
-        else console.log("Preview added successfully.");
+        else console.log("Video added successfully.");
       });
     });
   });
