@@ -99,7 +99,12 @@ app.post('/photos/upload', function(req, res, next) {
 	});
 });
 
-app.get('/updateTrip', function(req, res, next) {
+app.get('/updatePreview', function(req, res, next) {
+	addTripPreview(req.query.tripId);
+  res.send("Will complete maybe, go check :)");
+});
+
+app.get('/updateVideo', function(req, res, next) {
 	addTripVideo(req.query.tripId);
   res.send("Will complete maybe, go check :)");
 });
