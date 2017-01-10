@@ -85,9 +85,25 @@ function sendSuggestions() {
     								receiver: userId,
     								type: "restaurant"
   								};
-  								couchdb.insert(doc, uuid.v4(), function(err, result) {
-    									if (err) console.error('Error while inserting suggestion: ' + err);
-    									else console.log("Suggestion added successfully.");
+
+									var notificationId = uuid.v4();
+  								couchdb.insert(doc, notificationId, function(err, result) {
+    								if (err) console.error('Error while inserting suggestion: ' + err);
+    								else {
+											console.log("Suggestion " + notificationId + " added successfully.");
+											setTimeout(function() {
+												couchdb.get(notificationId, function(err, doc) {
+													if (err) { console.log("Error when getting notification doc: " + err) }
+													else if (!doc) {console.log("No notification doc found!")}
+													else {
+														couchdb.destroy(notificationId, doc._rev, function(err, body) {
+															if (err) { console.log("Error when destroying notification doc: " + err); }
+															else { console.log("Successfully destroyed notification doc!"); }
+														});
+													}
+												});
+											}, 7200000); // destroy doc after 2 hours
+										}
   								});
 								});
 							}
