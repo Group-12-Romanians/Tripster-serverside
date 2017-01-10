@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 var server = 'http://146.169.46.142';
 var nano = require('nano')(server + ':5984');
 var couchdb = nano.db.use('tripster01');
@@ -30,6 +31,7 @@ couchdb.update = function(obj, key, callback) {
  });
 };
 
+/*
 var now = new Date();
 var millisTill12 = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0) - now;
 if (millisTill12 < 0) {
@@ -39,6 +41,7 @@ setTimeout(function() {
 						sendSuggestions();
 						setInterval(sendSuggestions, millisInADay);
 					 }, millisTill12);
+*/
 
 function sendSuggestions() {
 	couchdb.view('runningTrips', 'byId', function(err, body) {
@@ -114,4 +117,7 @@ function sendSuggestions() {
 		});
 	});
 }
+
+sendSuggestions();
+
 					 
