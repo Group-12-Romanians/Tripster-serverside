@@ -194,6 +194,11 @@ function addTripVideo(tripId) {
       return;
     }
     var rawPlaces = body.rows;
+		if (rawPlaces.length === 0) {
+			console.log("No images for video!");
+			return;
+		}
+
 		var images = [];
 		rawPlaces.forEach(function(rawPlace) {
 			images.push(rawPlace.value._id + '.jpg');
