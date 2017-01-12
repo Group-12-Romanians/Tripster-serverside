@@ -64,12 +64,17 @@ function searchAndUpdatePlace(photoId) {
       return;
     }
     console.log('Adding place name to:' + doc.placeId);
-    addPlaceDetails(doc.placeId);
+    addPlaceDetails(doc.placeId, true);
 	});
 }
 
-function addPlaceDetails(docId) {
+function addPlaceDetails(docId, retry) {
   couchdb.get(docId, function(err, doc) {
+		if (err) {
+			if (retry) setTimeout(addPlaceDetails(docId, false), 3000); // retry after 3 seconds
+			else console.log('Failed in getting the placeDoc');
+			return;
+		}
     if (doc.name) {
 			console.error('Already has name');
 			return; // if place already has name we don't add one
@@ -111,9 +116,9 @@ app.get('/updateVideo', function(req, res, next) {
 
 var feed = couchdb.follow({since: "now"});
 feed.filter = function(doc, req) {
-  return doc.placeId !== null || // a photo
-         doc.stoppedAt !== null || // a stopped trip
-         (doc.folLevel !== null && doc.folLevel === -1); // a new follower with unset level
+  return doc.hasOwnProperty("placeId") || // a photo
+         doc.hasOwnProperty("stoppedAt") || // a stopped trip
+         (doc.hasOwnProperty("folLevel") && doc.folLevel === -1); // a new follower with unset level
 };
 feed.on('change', function(change) {
   console.log("change: ", change);
@@ -126,7 +131,7 @@ feed.on('change', function(change) {
     else console.log('This trip has all the neccessary parts'); // these checks are neccessary to serialize
     // the edits so that we don't create multiple previews and videos
   }
-  else if (doc.folLevel !== null && doc.folLevel === -1) createNotification(change.id); // a new follower
+  else if (doc.hasOwnProperty("folLevel") && doc.folLevel === -1) createNotification(change.id); // a new follower
 	else console.log('None of the feeds above');
 });
 feed.follow();
@@ -146,7 +151,7 @@ function createNotification(followId) {
 }
 
 function addTripName(tripId) {
-	var newDoc = {name: "Some smart name"};
+	var newDoc = {name: "Unnamed Trip"};
   couchdb.update(newDoc, tripId, function(err, result) {
     if (err) console.error('Error while inserting preview: ' + err);
     else console.log("Trip name added successfully.");
@@ -180,10 +185,10 @@ function addTripPreview(tripId) {
     });
 
 		var newDoc = {preview: createPreviewImage(getPreviewUrl(sortedPlaces, visitedPlaces))};
-    couchdb.update(newDoc, tripId, function(err, result) {
-      if (err) console.error('Error while inserting preview: ' + err);
+		setTimeout(couchdb.update(newDoc, tripId, function(err, result) {
+			if (err) console.error('Error while inserting preview: ' + err);
       else console.log("Preview added successfully.");
-    });
+    }), 1500); //delay so that we wait for actual photo
   });
 }
 
