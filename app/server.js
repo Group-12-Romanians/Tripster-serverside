@@ -81,7 +81,7 @@ function addPlaceDetails(docId, retry) {
 		}
     var params = {
   		location: doc.lat.toString() + ',' + doc.lng.toString(),
-  		radius: 250,
+      rankby: 'distance',
   		type: 'point_of_interest'
   	};
   	googlePlaces.nearbySearch(params, function updatePlace(err, res) {
