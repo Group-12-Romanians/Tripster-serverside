@@ -155,7 +155,6 @@ function randomSuggestionType() {
 	return types[Math.floor(Math.random() * types.length)];
 }
 	
-getSuggestionType("1233379543368282");		
 sendSuggestions();
 
 					 
