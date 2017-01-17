@@ -13,6 +13,8 @@ var PLACE_DETAILS_URL = 'https://maps.googleapis.com/maps/api/place/details/json
 
 var millisInADay = 86400000;
 
+var default_prefs = require('./default_prefs.json');
+
 // custom couchdb update function (needed to handle revisions)
 couchdb.update = function(obj, key, callback) {
  var db = this;
@@ -78,7 +80,7 @@ function sendSuggestions() {
 					location: lastLocation.lat.toString() + ',' + 
 									  lastLocation.lng.toString(),
 					radius: 1000,
-					type: 'restaurant'
+					type: getSuggestionType(userId)
 				};
 
 				googlePlaces.nearbySearch(params, function(err, res) {
@@ -116,6 +118,44 @@ function sendSuggestions() {
 	});
 }
 
-sendSuggestions();
+function getSuggestionType(userId) {
+	couchdb.get(userId, function(err, doc) {
+		var prefs = doc.prefs;
+		if (!prefs) {
+			return randomSuggestionType();
+		}
+
+		var sortedPrefs = Object.keys(prefs).sort(function(a, b) { return prefs[b] - prefs[a]; });
+		
+		if (prefs[sortedPrefs[0]] === 0) {
+			return randomSuggestionType();
+		}
+		
+		var fstPrefVal = prefs[sortedPrefs[0]];
+		var sndPrefVal = prefs[sortedPrefs[1]];
+		var trdPrefVal = prefs[sortedPrefs[2]];
+		var sum = fstPrefVal + sndPrefVal + trdPrefVal;
+		console.log(fstPrefVal);
+		var rand = Math.random();
+	
+		if (rand < fstPrefVal / sum) {
+			return sortedPrefs[0];
+		}
+
+		if (rand < (fstPrefVal + sndPrefVal) / sum) {
+			return sortedPrefs[1];
+		}
+
+		return sortedPrefs[2]; 
+	});
+}
+
+function randomSuggestionType() {
+	var types = Object.keys(default_prefs);
+	return types[Math.floor(Math.random() * types.length)];
+}
+	
+getSuggestionType("1233379543368282");		
+//sendSuggestions();
 
 					 

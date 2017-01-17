@@ -26,6 +26,8 @@ var GooglePlaces = require('node-googleplaces');
 var GOOGLE_API_KEY = 'AIzaSyBEcADKicF0ZeIooOSbh12Vu7BVyDOIjik';
 var googlePlaces = new GooglePlaces(GOOGLE_API_KEY);
 
+var default_prefs = require('./default_prefs.json');
+
 var app = express();
 app.use(express.static(path.join(__dirname, '../uploads')));
 app.use(bodyParser.json());
@@ -81,11 +83,12 @@ function addPlaceDetails(docId, retry) {
 		}
     var params = {
   		location: doc.lat.toString() + ',' + doc.lng.toString(),
-      rankby: 'distance',
+      	radius: 250,
   		type: 'point_of_interest'
   	};
-  	googlePlaces.nearbySearch(params, function updatePlace(err, res) {
-  		var newDoc = {name: res.body.results[0].name};
+
+  	googlePlaces.nearbySearch(params, function updatePlace(err, res) {	
+		var newDoc = {name: res.body.results[0].name};
   		couchdb.update(newDoc, docId, function(err, result) {
   			if (!err) {
   				console.log('Name given is:' + newDoc.name);
@@ -93,7 +96,40 @@ function addPlaceDetails(docId, retry) {
   				console.log('Error while updating doc: ' + err);
   			}
   		});
-  	});
+
+ 		var types = res.body.results[0].types;
+		couchdb.get(doc.tripId, function(err, doc) {
+			if (err) {
+				console.log(err);
+				return;
+			}
+
+			var userId = doc.ownerId;
+			couchdb.get(userId, function(err, doc) {
+				if (err) {
+					console.log(err);
+					return;
+				}
+		
+				var prefs = doc.prefs || default_prefs;
+				types.forEach(function updatePref(type) {
+					if (prefs[type] !== undefined) {
+						prefs[type]++;
+					}
+				});
+
+				var newUserDoc = {prefs : prefs};
+
+				couchdb.update(newUserDoc, userId, function(err, result) {
+					if (err) {
+						console.log('Error while updating user prefs: ' + err);
+					} else {
+						console.log('Update user prefs successfully: ' + prefs);
+					}
+				});
+			});	
+  		});
+ 	});
   });
 }
 
