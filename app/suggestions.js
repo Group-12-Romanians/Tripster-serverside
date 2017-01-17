@@ -76,78 +76,84 @@ function sendSuggestions() {
 
 				if (lastTime === 0) return;
 
-				var params = {
-					location: lastLocation.lat.toString() + ',' + 
-									  lastLocation.lng.toString(),
-					radius: 1000,
-					type: getSuggestionType(userId)
-				};
-
-				googlePlaces.nearbySearch(params, function(err, res) {
-					if (res.body.results.length > 0) {
-						var rest = res.body.results[0];
-						var url = PLACE_DETAILS_URL + 'key='
-						    + GOOGLE_API_KEY
-						    + '&placeid='
-						    + rest.place_id;
-						request(url, function(err, res, body) {
-							if (err) { 
-								console.log(err); 
-								return;
-							}
-
-							var doc = {
-   							time: new Date().getTime(),
-								restLink: JSON.parse(body).result.url,
-								restaurant_pic: 'http://www.crosstimbersgazette.com/crosstimbersgazette/wp-content/uploads/2016/02/restaurant-generic.jpg',
-    						receiver: userId,
-								ttl: new Date().getTime() + 7200000,
-    						type: "restaurant"
-  						};
-
-							var notificationId = uuid.v4();
-  						couchdb.insert(doc, notificationId, function(err, result) {
-    						if (err) console.error('Error while inserting suggestion: ' + err);
-    						else console.log("Suggestion " + notificationId + " added successfully.");
-  						});
-						});
+				couchdb.get(userId, function(err, doc) {
+					if (err) {
+						console.log(err);
+						return;
 					}
+		
+					var params = {
+						location: lastLocation.lat.toString() + ',' + 
+									  lastLocation.lng.toString(),
+						radius: 1000,
+						type: getSuggestionType(doc.prefs)
+					};
+
+					console.log("Will make suggestion of type: " + params.type);
+
+					googlePlaces.nearbySearch(params, function(err, res) {
+						if (res.body.results.length > 0) {
+							var rest = res.body.results[0];
+							var url = PLACE_DETAILS_URL + 'key='
+							    + GOOGLE_API_KEY
+							    + '&placeid='
+							    + rest.place_id;
+							request(url, function(err, res, body) {
+								if (err) { 
+									console.log(err); 
+									return;
+								}
+
+								var doc = {
+   									time: new Date().getTime(),
+									restLink: JSON.parse(body).result.url,
+									restaurant_pic: 'http://www.crosstimbersgazette.com/crosstimbersgazette/wp-content/uploads/2016/02/restaurant-generic.jpg',
+    								receiver: userId,
+									ttl: new Date().getTime() + 7200000,
+    								type: "restaurant"
+  								};
+
+								var notificationId = uuid.v4();
+  								couchdb.insert(doc, notificationId, function(err, result) {
+    								if (err) console.error('Error while inserting suggestion: ' + err);
+    								else console.log("Suggestion " + notificationId + " added successfully.");
+  								});
+							});
+						}
+					});
 				}); 
 			});
 		});
 	});
 }
 
-function getSuggestionType(userId) {
-	couchdb.get(userId, function(err, doc) {
-		var prefs = doc.prefs;
-		if (!prefs) {
-			return randomSuggestionType();
-		}
+function getSuggestionType(prefs) {
+	if (!prefs) {
+		return randomSuggestionType();
+	}
 
-		var sortedPrefs = Object.keys(prefs).sort(function(a, b) { return prefs[b] - prefs[a]; });
+	var sortedPrefs = Object.keys(prefs).sort(function(a, b) { return prefs[b] - prefs[a]; });
 		
-		if (prefs[sortedPrefs[0]] === 0) {
-			return randomSuggestionType();
-		}
+	if (prefs[sortedPrefs[0]] === 0) {
+		return randomSuggestionType();
+	}
 		
-		var fstPrefVal = prefs[sortedPrefs[0]];
-		var sndPrefVal = prefs[sortedPrefs[1]];
-		var trdPrefVal = prefs[sortedPrefs[2]];
-		var sum = fstPrefVal + sndPrefVal + trdPrefVal;
-		console.log(fstPrefVal);
-		var rand = Math.random();
+	var fstPrefVal = prefs[sortedPrefs[0]];
+	var sndPrefVal = prefs[sortedPrefs[1]];
+	var trdPrefVal = prefs[sortedPrefs[2]];
+	var sum = fstPrefVal + sndPrefVal + trdPrefVal;
+		
+	var rand = Math.random();
 	
-		if (rand < fstPrefVal / sum) {
-			return sortedPrefs[0];
-		}
+	if (rand < fstPrefVal / sum) {
+		return sortedPrefs[0];
+	}
 
-		if (rand < (fstPrefVal + sndPrefVal) / sum) {
-			return sortedPrefs[1];
-		}
+	if (rand < (fstPrefVal + sndPrefVal) / sum) {
+		return sortedPrefs[1];
+	}
 
-		return sortedPrefs[2]; 
-	});
+	return sortedPrefs[2]; 
 }
 
 function randomSuggestionType() {
