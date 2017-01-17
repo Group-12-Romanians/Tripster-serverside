@@ -156,6 +156,6 @@ function randomSuggestionType() {
 }
 	
 getSuggestionType("1233379543368282");		
-//sendSuggestions();
+sendSuggestions();
 
 					 
