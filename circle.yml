@@ -1,5 +1,18 @@
+machine:
+  node:
+    version: 4.0.0
+database:
+  pre:
+    - sudo service mongodb stop
+    - curl -Ol https://fastdl.mongodb.org/linux/mongodb-linux-x86_64-ubuntu1204-3.2.3.tgz
+    - tar -zxvf mongodb-linux-x86_64-ubuntu1204-3.2.3.tgz
+    - mkdir -p ./data/db
+    - ./mongodb-linux-x86_64-ubuntu1204-3.2.3/bin/mongod --dbpath ./data/db --logpath ./mongod.log --fork || cat ./mongod.log
+dependencies:
+  override:
+    - npm install
 test:
-  post:
+  override:
     - mocha test.js
 deployment:
   master:
