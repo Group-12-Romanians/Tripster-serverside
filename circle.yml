@@ -10,7 +10,7 @@ database:
     - ./mongodb-linux-x86_64-ubuntu1204-3.2.3/bin/mongod --dbpath ./data/db --logpath ./mongod.log --fork || cat ./mongod.log
 dependencies:
   override:
-    - npm install
+    - npm install app
 test:
   override:
     - mocha test.js
