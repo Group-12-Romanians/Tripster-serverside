@@ -1,0 +1,25 @@
+{
+  "name": "Tripster-serverside",
+  "main": "server.js",
+  "description": "An example module to illustrate the usage of a package.json",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "body-parser": "^1.15.2",
+    "express": "3.x",
+    "forever": "^0.15.3",
+    "geolib": "^2.0.22",
+    "gm": "^1.23.0",
+    "google": "^2.1.0",
+    "mongodb": "^2.2.11",
+    "mongoose": "^4.6.5",
+    "multer": "^1.2.0",
+    "nano": "^6.2.0",
+    "node-googleplaces": "^0.1.2",
+    "node-uuid": "^1.4.7",
+    "promise": "^7.1.1",
+    "threads": "^0.7.2",
+    "videoshow": "^0.1.10"
+  }
+}
